@@ -166,6 +166,55 @@ class DecisionLogReader:
             })
         return buckets
 
+    def get_total_decisions(self, task: str | None = None) -> int:
+        """Count total decisions recorded, optionally filtered by task."""
+        conn = self._get_conn()
+        if task:
+            res = conn.execute("SELECT COUNT(*) FROM db.decisions WHERE task = ?", [task]).fetchone()
+        else:
+            res = conn.execute("SELECT COUNT(*) FROM db.decisions").fetchone()
+        return res[0] if res else 0
+
+    def get_recent_decisions(self, limit: int = 10) -> list[DecisionRecord]:
+        """Fetch the most recent N decisions for dashboard display."""
+        return self.query_records(limit=limit)
+
+    def calculate_ece(self, task: str | None = None, num_bins: int = 10) -> float:
+        """
+        Compute Expected Calibration Error (ECE) across predictions with ground-truth labels.
+        Returns 0.0 if insufficient labeled data.
+        """
+        conn = self._get_conn()
+        where_sql = "WHERE human_label IS NOT NULL" + (" AND task = ?" if task else "")
+        params = [task] if task else []
+
+        query = f"""
+        SELECT COUNT(*) as total_labeled
+        FROM db.decisions
+        {where_sql};
+        """
+        res = conn.execute(query, params).fetchone()
+        total_labeled = res[0] if res else 0
+        if total_labeled == 0:
+            return 0.0
+
+        bucket_size = 1.0 / num_bins
+        bucket_query = f"""
+        SELECT
+            COUNT(*) as bin_count,
+            AVG(confidence) as avg_conf,
+            AVG(CASE WHEN human_label = decision_value THEN 1.0 ELSE 0.0 END) as empirical_acc
+        FROM db.decisions
+        {where_sql}
+        GROUP BY CAST(FLOOR(confidence / {bucket_size}) * {bucket_size} AS REAL);
+        """
+        rows = conn.execute(bucket_query, params).fetchall()
+        ece = 0.0
+        for bin_count, avg_conf, emp_acc in rows:
+            weight = bin_count / total_labeled
+            ece += weight * abs((avg_conf or 0.0) - (emp_acc or 0.0))
+        return round(ece, 4)
+
     def close(self) -> None:
         """Close DuckDB analytical connection."""
         if self._conn is not None:

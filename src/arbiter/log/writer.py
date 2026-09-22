@@ -47,6 +47,10 @@ class DecisionLogWriter:
         self._running = False
         self._init_lock = asyncio.Lock()
 
+    async def start(self) -> None:
+        """Explicitly initialize DB and start the background writer loop."""
+        await self._init_db()
+
     async def _init_db(self) -> aiosqlite.Connection:
         if self._db is not None:
             return self._db
