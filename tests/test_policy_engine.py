@@ -108,6 +108,7 @@ def test_policy_engine_rule_evaluation():
         client_id="default",
         value="safe",
         confidence=0.96,
+        is_calibrated=True,
     )
     action, reason = engine.evaluate(ctx_allow)
     assert action == Action.ALLOW
@@ -119,6 +120,7 @@ def test_policy_engine_rule_evaluation():
         client_id="default",
         value="dangerous",
         confidence=0.90,
+        is_calibrated=True,
     )
     action, reason = engine.evaluate(ctx_deny)
     assert action == Action.DENY
@@ -129,6 +131,7 @@ def test_policy_engine_rule_evaluation():
         client_id="default",
         value="safe",
         confidence=0.72,
+        is_calibrated=True,
     )
     action, reason = engine.evaluate(ctx_ask)
     assert action == Action.ASK
@@ -139,6 +142,7 @@ def test_policy_engine_rule_evaluation():
         client_id="default",
         value="unknown",
         confidence=0.88,
+        is_calibrated=True,
     )
     action, reason = engine.evaluate(ctx_fallback)
     assert action == Action.ASK
@@ -151,27 +155,40 @@ def test_client_overrides_evaluation():
     engine.register_policy(policy)
 
     # For default client, confidence 0.96 safe is ALLOW
-    ctx_default = PolicyContext(task="bash-risk", client_id="default", value="safe", confidence=0.96)
+    ctx_default = PolicyContext(task="bash-risk", client_id="default", value="safe", confidence=0.96, is_calibrated=True)
     action, _ = engine.evaluate(ctx_default)
     assert action == Action.ALLOW
 
     # For claude-code override, bar is 0.98, so 0.96 falls through to client default ASK
-    ctx_claude = PolicyContext(task="bash-risk", client_id="claude-code", value="safe", confidence=0.96)
+    ctx_claude = PolicyContext(task="bash-risk", client_id="claude-code", value="safe", confidence=0.96, is_calibrated=True)
     action, reason = engine.evaluate(ctx_claude)
     assert action == Action.ASK
     assert "client_default:claude-code" in reason
 
     # With confidence 0.99, claude-code passes override rule -> ALLOW
-    ctx_claude_pass = PolicyContext(task="bash-risk", client_id="claude-code", value="safe", confidence=0.99)
+    ctx_claude_pass = PolicyContext(task="bash-risk", client_id="claude-code", value="safe", confidence=0.99, is_calibrated=True)
     action, reason = engine.evaluate(ctx_claude_pass)
     assert action == Action.ALLOW
     assert "client_override:claude-code" in reason
 
     # CI runner default action is DENY
-    ctx_ci = PolicyContext(task="bash-risk", client_id="ci-runner", value="unknown", confidence=0.85)
+    ctx_ci = PolicyContext(task="bash-risk", client_id="ci-runner", value="unknown", confidence=0.85, is_calibrated=True)
     action, reason = engine.evaluate(ctx_ci)
     assert action == Action.DENY
     assert "client_default:ci-runner" in reason
+
+
+def test_default_uncalibrated_fails_closed():
+    engine = PolicyEngine()
+    policy = load_policy_from_str(SAMPLE_BASH_POLICY_YAML)
+    engine.register_policy(policy)
+
+    # Even with 0.99 confidence and "safe", uncalibrated default MUST abstain (Action.ASK)
+    ctx = PolicyContext(task="bash-risk", client_id="default", value="safe", confidence=0.99)
+    assert ctx.is_calibrated is False
+    action, reason = engine.evaluate(ctx)
+    assert action == Action.ASK
+    assert reason == "stale_calibration"
 
 
 def test_calibration_and_provider_error_safety():
@@ -226,6 +243,7 @@ def test_python_hook_escape_hatch():
         value="dirty",
         confidence=0.95,
         context={"branch": "production"},
+        is_calibrated=True,
     )
     action, reason = engine.evaluate(ctx_prod_dirty)
     assert action == Action.DENY
@@ -237,6 +255,7 @@ def test_python_hook_escape_hatch():
         value="clean",
         confidence=0.95,
         context={"branch": "staging"},
+        is_calibrated=True,
     )
     action, reason = engine.evaluate(ctx_staging)
     assert action == Action.ASK
@@ -247,13 +266,13 @@ def test_context_compaction_vocabulary():
     policy = load_policy_from_str(SAMPLE_PRUNING_POLICY_YAML)
     engine.register_policy(policy)
 
-    ctx_drop = PolicyContext(task="context-pruning", value="irrelevant", confidence=0.92)
+    ctx_drop = PolicyContext(task="context-pruning", value="irrelevant", confidence=0.92, is_calibrated=True)
     assert engine.evaluate(ctx_drop)[0] == Action.DROP
 
-    ctx_trunc = PolicyContext(task="context-pruning", value="verbose", confidence=0.84)
+    ctx_trunc = PolicyContext(task="context-pruning", value="verbose", confidence=0.84, is_calibrated=True)
     assert engine.evaluate(ctx_trunc)[0] == Action.TRUNCATE
 
-    ctx_keep = PolicyContext(task="context-pruning", value="vital", confidence=0.88)
+    ctx_keep = PolicyContext(task="context-pruning", value="vital", confidence=0.88, is_calibrated=True)
     assert engine.evaluate(ctx_keep)[0] == Action.KEEP
 
 

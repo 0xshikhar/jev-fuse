@@ -19,7 +19,13 @@ CREATE TABLE IF NOT EXISTS decisions (
     human_label TEXT,
     human_labeled_at TEXT,
     context_json TEXT,
-    reason TEXT
+    reason TEXT,
+    model TEXT,
+    questions_json TEXT,
+    answers_json TEXT,
+    input_tokens INTEGER DEFAULT 0,
+    output_tokens INTEGER DEFAULT 0,
+    status TEXT DEFAULT 'success'
 );
 
 -- Indices for fast real-time audit queries and analytical aggregations

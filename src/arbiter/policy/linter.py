@@ -82,6 +82,7 @@ def simulate_coverage(
                     client_id=client_id,
                     value=val,
                     confidence=conf,
+                    is_calibrated=True,
                 )
                 action, reason = engine.evaluate(ctx)
                 report.action_counts[action] += 1

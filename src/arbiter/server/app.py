@@ -82,21 +82,51 @@ def create_app(engine: ArbiterEngine | None = None) -> FastAPI:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
     # -------------------------------------------------------------
-    # 3. TypeSafe Jev 100% Drop-In Compatibility Endpoint
+    # 3. TypeSafe Jev 100% Drop-In Compatibility Endpoint (POST /v1/systemone)
     # -------------------------------------------------------------
     @app.post("/v1/systemone", tags=["TypeSafe Compatibility"])
+    @app.post("/systemone", tags=["TypeSafe Compatibility"])
     @app.post("/v1/predict", tags=["TypeSafe Compatibility"])
-    async def systemone(payload: dict[str, Any]) -> dict[str, Any]:
-        """TypeSafe Jev drop-in endpoint. Existing SDKs can point here by setting base_url."""
+    async def systemone(
+        payload: dict[str, Any],
+        request: Request,
+        response: Response,
+    ) -> dict[str, Any]:
+        """TypeSafe Jev drop-in endpoint. Existing SDKs and hooks can point here with zero code changes."""
         if "state" not in payload or "questions" not in payload:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="Payload must include 'state' and 'questions' dictionary",
             )
+        auth_header = request.headers.get("authorization")
         try:
-            return await app_engine.systemone(payload)
+            sys_res = await app_engine.systemone(payload, auth_header=auth_header)
+            if sys_res.latency_ms is not None:
+                response.headers["X-Arbiter-Latency-Ms"] = str(sys_res.latency_ms)
+            return sys_res.model_dump(mode="json")
+        except HTTPException:
+            raise
         except Exception as e:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+    @app.get("/v1/models", tags=["TypeSafe Compatibility"])
+    @app.get("/models", tags=["TypeSafe Compatibility"])
+    async def list_models() -> dict[str, Any]:
+        """Available models list matching TypeSafe API contract."""
+        return {
+            "models": [
+                {
+                    "name": "jev-latest",
+                    "description": "General-purpose system one model running via Arbiter Trojan Horse Proxy",
+                    "release_date": "2026-09-15",
+                },
+                {
+                    "name": "jev-1.13.0",
+                    "description": "Pinned jev-1.13.0 model running via Arbiter",
+                    "release_date": "2026-09-01",
+                },
+            ]
+        }
 
     # -------------------------------------------------------------
     # 4. Active Learning & Human Ground Truth Feedback

@@ -32,6 +32,12 @@ class DecisionRecord(BaseModel):
     human_labeled_at: str | None = Field(default=None, description="Timestamp when label was reviewed")
     context: dict[str, Any] = Field(default_factory=dict, description="Metadata dictionary")
     reason: str | None = Field(default=None, description="Policy reason or error note")
+    model: str | None = Field(default=None, description="Model identifier (e.g. 'jev-latest')")
+    questions_json: str | None = Field(default=None, description="Serialized questions JSON")
+    answers_json: str | None = Field(default=None, description="Serialized full answers JSON")
+    input_tokens: int = Field(default=0, description="Input tokens used")
+    output_tokens: int = Field(default=0, description="Output tokens used")
+    status: str = Field(default="success", description="Execution status (success or error)")
 
     def to_sql_tuple(self) -> tuple[Any, ...]:
         """Convert record to parameter tuple matching schema.sql column order."""
@@ -54,6 +60,12 @@ class DecisionRecord(BaseModel):
             self.human_labeled_at,
             json.dumps(self.context, ensure_ascii=False) if self.context else None,
             self.reason,
+            self.model,
+            self.questions_json,
+            self.answers_json,
+            self.input_tokens,
+            self.output_tokens,
+            self.status,
         )
 
     @classmethod
@@ -98,4 +110,10 @@ class DecisionRecord(BaseModel):
             human_labeled_at=row.get("human_labeled_at"),
             context=context_dict,
             reason=row.get("reason"),
+            model=row.get("model"),
+            questions_json=row.get("questions_json"),
+            answers_json=row.get("answers_json"),
+            input_tokens=row.get("input_tokens") or 0,
+            output_tokens=row.get("output_tokens") or 0,
+            status=row.get("status") or "success",
         )

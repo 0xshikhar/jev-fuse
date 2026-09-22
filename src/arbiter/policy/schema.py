@@ -86,5 +86,5 @@ class PolicyContext(BaseModel):
     value: str | float | bool
     confidence: float = Field(..., ge=0.0, le=1.0)
     context: dict[str, Any] = Field(default_factory=dict)
-    is_calibrated: bool = True
+    is_calibrated: bool = False
     provider_error: str | None = None

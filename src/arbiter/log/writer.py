@@ -14,8 +14,9 @@ INSERT_DECISION_SQL = """
 INSERT INTO decisions (
     trace_id, timestamp_ns, timestamp_iso, task, client_id, provider,
     input_hash, input_preview, decision_value, raw_score, confidence,
-    action, latency_ms, cached, human_label, human_labeled_at, context_json, reason
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    action, latency_ms, cached, human_label, human_labeled_at, context_json, reason,
+    model, questions_json, answers_json, input_tokens, output_tokens, status
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(trace_id) DO UPDATE SET
     human_label = COALESCE(excluded.human_label, decisions.human_label),
     human_labeled_at = COALESCE(excluded.human_labeled_at, decisions.human_labeled_at);
@@ -70,6 +71,22 @@ class DecisionLogWriter:
 
             schema_sql = SCHEMA_PATH.read_text(encoding="utf-8")
             await conn.executescript(schema_sql)
+
+            # Auto-migrate existing databases
+            new_cols = [
+                ("model", "TEXT"),
+                ("questions_json", "TEXT"),
+                ("answers_json", "TEXT"),
+                ("input_tokens", "INTEGER DEFAULT 0"),
+                ("output_tokens", "INTEGER DEFAULT 0"),
+                ("status", "TEXT DEFAULT 'success'"),
+            ]
+            for col_name, col_type in new_cols:
+                try:
+                    await conn.execute(f"ALTER TABLE decisions ADD COLUMN {col_name} {col_type};")
+                except Exception:
+                    pass
+
             await conn.commit()
             self._db = conn
 
