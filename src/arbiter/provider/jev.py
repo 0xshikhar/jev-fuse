@@ -17,14 +17,22 @@ from arbiter.provider.exceptions import (
 )
 from arbiter.schema.decision import DecisionKind
 from arbiter.schema.internal import NormalizedRequest, RawScore
+from arbiter.schema.systemone import (
+    ChoiceAnswer,
+    NoulAnswer,
+    ScoreAnswer,
+    SystemOneRequest,
+    SystemOneResponse,
+    Usage,
+)
 
-DEFAULT_JEV_BASE_URL = "https://api.typesafe.ai/v1"
-DEFAULT_TIMEOUT_MS = 800.0
+DEFAULT_TYPESAFE_BASE_URL = "https://api.typesafe.ai"
+DEFAULT_TIMEOUT_MS = 10000.0  # 10s matching official SDK
 DEFAULT_MAX_RETRIES = 3
 
 
 class JevDriver(DecisionProvider):
-    """Hosted provider communicating with TypeSafe Jev cloud decision API over HTTP/2."""
+    """Hosted provider communicating with TypeSafe Jev cloud decision API over HTTP/2 using POST /v1/systemone."""
 
     def __init__(
         self,
@@ -34,14 +42,27 @@ class JevDriver(DecisionProvider):
         max_retries: int = DEFAULT_MAX_RETRIES,
         http_client: httpx.AsyncClient | None = None,
     ):
-        resolved_key = api_key or os.environ.get("JEV_API_KEY")
+        resolved_key = (
+            api_key
+            or os.environ.get("TYPESAFE_API_KEY")
+            or os.environ.get("JEV_API_KEY")
+        )
         if not resolved_key:
             raise ProviderAuthenticationError(
-                "JEV_API_KEY is not set. Please export JEV_API_KEY or provide api_key to JevDriver."
+                "TYPESAFE_API_KEY (or JEV_API_KEY) is not set. Please export TYPESAFE_API_KEY or provide api_key."
             )
 
         self._api_key = resolved_key
-        self._base_url = (base_url or os.environ.get("JEV_BASE_URL") or DEFAULT_JEV_BASE_URL).rstrip("/")
+        raw_base = (
+            base_url
+            or os.environ.get("TYPESAFE_BASE_URL")
+            or os.environ.get("JEV_BASE_URL")
+            or DEFAULT_TYPESAFE_BASE_URL
+        ).rstrip("/")
+        # If user passed url with /v1 at the end, strip it so base client targets root
+        if raw_base.endswith("/v1"):
+            raw_base = raw_base[:-3]
+        self._base_url = raw_base
         self._timeout_seconds = timeout_ms / 1000.0
         self._max_retries = max_retries
 
@@ -56,7 +77,7 @@ class JevDriver(DecisionProvider):
                 limits=httpx.Limits(max_keepalive_connections=20, max_connections=50),
                 headers={
                     "Authorization": f"Bearer {self._api_key}",
-                    "User-Agent": "arbiter-runtime/0.1.0",
+                    "User-Agent": "arbiter-runtime/0.1.0 (TypeSafe-Proxy)",
                     "Content-Type": "application/json",
                 },
             )
@@ -66,64 +87,32 @@ class JevDriver(DecisionProvider):
     def name(self) -> str:
         return "jev"
 
-    def _format_request_payload(self, req: NormalizedRequest) -> dict[str, Any]:
-        """Convert NormalizedRequest to Jev API JSON format."""
-        payload: dict[str, Any] = {
-            "task": req.task,
-            "kind": req.kind.value,
-            "input": req.input,
-            "trace_id": req.trace_id,
-            "client_id": req.client_id,
-            "context": req.context,
-        }
-        if req.choices is not None:
-            payload["choices"] = list(req.choices)
-        return payload
-
-    def _parse_raw_score(self, item: dict[str, Any], kind: DecisionKind) -> RawScore:
-        """Parse raw response payload into canonical RawScore."""
-        raw_val = item.get("value")
-        score_val = float(item.get("score") if item.get("score") is not None else item.get("raw_score", 0.0))
-        cand_scores = item.get("candidate_scores")
-
-        # Cast value appropriately
-        typed_val: str | float | bool
-        if kind == DecisionKind.BOOL:
-            if isinstance(raw_val, bool):
-                typed_val = raw_val
-            elif isinstance(raw_val, str):
-                typed_val = raw_val.strip().lower() in ("true", "1", "yes", "allow")
-            else:
-                typed_val = bool(raw_val)
-        elif kind == DecisionKind.SCORE:
-            typed_val = float(raw_val) if raw_val is not None else score_val
-        else:
-            typed_val = str(raw_val)
-
-        return RawScore(
-            value=typed_val,
-            raw_score=score_val,
-            candidate_scores=cand_scores,
-        )
-
-    async def _send_with_retries(self, method: str, url: str, json_data: Any) -> dict[str, Any]:
+    async def _send_with_retries(
+        self,
+        method: str,
+        path: str,
+        json_data: Any,
+        custom_auth: str | None = None,
+    ) -> dict[str, Any]:
         """Execute HTTP request with exponential backoff for 429 and transient 5xx."""
         attempt = 0
-        backoff_base = 0.1  # 100ms base
+        backoff_base = 0.1
 
+        auth = custom_auth or f"Bearer {self._api_key}"
         headers = {
-            "Authorization": f"Bearer {self._api_key}",
+            "Authorization": auth,
             "User-Agent": "arbiter-runtime/0.1.0",
+            "Content-Type": "application/json",
         }
 
         while True:
             try:
-                response = await self._client.request(method, url, json=json_data, headers=headers)
-                
+                response = await self._client.request(method, path, json=json_data, headers=headers)
+
                 # Check 401/403 auth issues
                 if response.status_code in (401, 403):
                     raise ProviderAuthenticationError(
-                        f"TypeSafe Jev API rejected credentials (status {response.status_code}): {response.text}"
+                        f"TypeSafe API rejected credentials (status {response.status_code}): {response.text}"
                     )
 
                 # Check 429 rate limit
@@ -133,10 +122,9 @@ class JevDriver(DecisionProvider):
                         retry_after_str = response.headers.get("Retry-After")
                         retry_after = float(retry_after_str) if retry_after_str and retry_after_str.isdigit() else None
                         raise RateLimitExceededError(
-                            f"TypeSafe Jev API rate limit exceeded after {self._max_retries} retries",
+                            f"TypeSafe API rate limit exceeded after {self._max_retries} retries",
                             retry_after=retry_after,
                         )
-                    # Exponential backoff with jitter
                     sleep_time = (backoff_base * (2 ** (attempt - 1))) + random.uniform(0.01, 0.05)
                     await asyncio.sleep(sleep_time)
                     continue
@@ -146,16 +134,16 @@ class JevDriver(DecisionProvider):
                     attempt += 1
                     if attempt > self._max_retries:
                         raise ProviderUnavailableError(
-                            f"TypeSafe Jev API unavailable (status {response.status_code}): {response.text}"
+                            f"TypeSafe API unavailable (status {response.status_code}): {response.text}"
                         )
                     sleep_time = (backoff_base * (2 ** (attempt - 1))) + random.uniform(0.01, 0.05)
                     await asyncio.sleep(sleep_time)
                     continue
 
-                # Check any other 4xx errors
+                # Check 4xx client errors
                 if 400 <= response.status_code < 500:
                     raise ProviderError(
-                        f"TypeSafe Jev API client error (status {response.status_code}): {response.text}",
+                        f"TypeSafe API client error (status {response.status_code}): {response.text}",
                         error_code="validation_error",
                     )
 
@@ -166,7 +154,7 @@ class JevDriver(DecisionProvider):
                 attempt += 1
                 if attempt > self._max_retries:
                     raise ProviderTimeoutError(
-                        f"TypeSafe Jev API timed out after {self._timeout_seconds * 1000:.0f}ms ({exc})"
+                        f"TypeSafe API timed out after {self._timeout_seconds * 1000:.0f}ms ({exc})"
                     ) from exc
                 sleep_time = (backoff_base * (2 ** (attempt - 1))) + random.uniform(0.01, 0.05)
                 await asyncio.sleep(sleep_time)
@@ -175,45 +163,144 @@ class JevDriver(DecisionProvider):
                 attempt += 1
                 if attempt > self._max_retries:
                     raise ProviderUnavailableError(
-                        f"Failed to connect to TypeSafe Jev API ({exc})"
+                        f"Failed to connect to TypeSafe API ({exc})"
                     ) from exc
                 sleep_time = (backoff_base * (2 ** (attempt - 1))) + random.uniform(0.01, 0.05)
                 await asyncio.sleep(sleep_time)
 
+    async def system_one(
+        self,
+        request: SystemOneRequest,
+        auth_header: str | None = None,
+    ) -> SystemOneResponse:
+        """Call official TypeSafe Jev POST /v1/systemone endpoint."""
+        body = {
+            "model": request.model,
+            "state": request.state,
+            "questions": request.questions,
+        }
+        res_data = await self._send_with_retries(
+            "POST",
+            "/v1/systemone",
+            body,
+            custom_auth=auth_header,
+        )
+        usage_data = res_data.get("usage", {})
+        return SystemOneResponse(
+            model=res_data.get("model", request.model),
+            answers=res_data.get("answers", {}),
+            usage=Usage(
+                input_tokens=usage_data.get("input_tokens", 0),
+                output_tokens=usage_data.get("output_tokens", 0),
+            ),
+        )
+
+    def _parse_answer_to_raw_score(self, ans: dict[str, Any], kind: DecisionKind) -> RawScore:
+        """Parse native TypeSafe systemone answer into RawScore."""
+        ans_type = ans.get("type")
+        if ans_type == "choice" or kind == DecisionKind.CHOICE:
+            choice = ans.get("choice", "")
+            confidence = float(ans.get("confidence", 0.0))
+            probs = ans.get("probabilities", {})
+            return RawScore(
+                value=choice,
+                raw_score=confidence,
+                candidate_scores=probs if isinstance(probs, dict) else None,
+            )
+        elif ans_type == "score" or kind == DecisionKind.SCORE:
+            score = float(ans.get("score", 0.0))
+            confidence = float(ans.get("confidence", score))
+            probs = ans.get("probabilities")
+            return RawScore(
+                value=score,
+                raw_score=confidence,
+                candidate_scores=probs if isinstance(probs, dict) else None,
+            )
+        else:  # noul or bool
+            noul = float(ans.get("noul", 0.5))
+            return RawScore(
+                value=bool(noul >= 0.5),
+                raw_score=noul,
+                candidate_scores={"true": noul, "false": round(1.0 - noul, 4)},
+            )
+
     async def infer(self, batch: Sequence[NormalizedRequest]) -> list[RawScore]:
-        """Execute a batch of normalized decision requests against Jev API."""
+        """
+        Execute normalized requests using standard POST /v1/systemone.
+        Folds multiple questions into one single forward pass against state.
+        """
         if not batch:
             return []
 
-        if len(batch) == 1:
-            req = batch[0]
-            payload = self._format_request_payload(req)
-            result_data = await self._send_with_retries("POST", "/decide", payload)
-            return [self._parse_raw_score(result_data, req.kind)]
+        # Check if all requests share the same input (common in fan-out evaluations)
+        first_input = batch[0].input
+        all_same_input = all(r.input == first_input for r in batch)
 
-        # Multi-request batch execution
-        batch_payload = {"requests": [self._format_request_payload(r) for r in batch]}
-        try:
-            batch_result = await self._send_with_retries("POST", "/decide/batch", batch_payload)
-            results = batch_result.get("results", [])
-            if len(results) != len(batch):
-                raise ProviderError(
-                    f"Jev API returned mismatched batch length (expected {len(batch)}, got {len(results)})"
-                )
-            return [self._parse_raw_score(res, req.kind) for res, req in zip(results, batch)]
-        except ProviderError as e:
-            # If batch endpoint is not supported, fall back to concurrent single requests
-            if e.error_code == "validation_error":
-                tasks = [self.infer([r]) for r in batch]
-                single_results = await asyncio.gather(*tasks)
-                return [r[0] for r in single_results]
-            raise
+        if all_same_input:
+            questions: dict[str, Any] = {}
+            for i, req in enumerate(batch):
+                q_key = f"q_{i}_{req.task}"
+                if req.kind == DecisionKind.CHOICE:
+                    crit: dict[str, str] = {}
+                    if req.choices:
+                        for c in req.choices:
+                            crit[c] = c
+                    else:
+                        crit = {"option_a": "option_a", "option_b": "option_b"}
+                    questions[q_key] = {
+                        "type": "choice",
+                        "instructions": req.task,
+                        "criteria": crit,
+                    }
+                elif req.kind == DecisionKind.SCORE:
+                    questions[q_key] = {
+                        "type": "score",
+                        "instructions": req.task,
+                        "criteria": ["low", "medium", "high", "critical"],
+                    }
+                else:
+                    questions[q_key] = {
+                        "type": "noul",
+                        "instructions": req.task,
+                    }
+
+            sys_req = SystemOneRequest(
+                state=first_input,
+                model="jev-latest",
+                questions=questions,
+            )
+            sys_res = await self.system_one(sys_req)
+            return [
+                self._parse_answer_to_raw_score(sys_res.answers.get(f"q_{i}_{req.task}", {}), req.kind)
+                for i, req in enumerate(batch)
+            ]
+
+        # Heterogeneous inputs -> run concurrent single-request evaluations
+        async def evaluate_single(r: NormalizedRequest) -> RawScore:
+            q_key = r.task
+            if r.kind == DecisionKind.CHOICE:
+                crit = {c: c for c in r.choices} if r.choices else {"a": "a", "b": "b"}
+                q_spec = {"type": "choice", "instructions": r.task, "criteria": crit}
+            elif r.kind == DecisionKind.SCORE:
+                q_spec = {"type": "score", "instructions": r.task, "criteria": ["low", "medium", "high", "critical"]}
+            else:
+                q_spec = {"type": "noul", "instructions": r.task}
+
+            sys_req = SystemOneRequest(
+                state=r.input,
+                model="jev-latest",
+                questions={q_key: q_spec},
+            )
+            sys_res = await self.system_one(sys_req)
+            return self._parse_answer_to_raw_score(sys_res.answers.get(q_key, {}), r.kind)
+
+        return await asyncio.gather(*(evaluate_single(r) for r in batch))
 
     async def health(self) -> ProviderHealth:
-        """Probe Jev API liveness and report round-trip latency."""
+        """Probe TypeSafe API liveness via GET /v1/models and report latency."""
         start_time = time.perf_counter()
         try:
-            resp = await self._send_with_retries("GET", "/health", None)
+            resp = await self._send_with_retries("GET", "/v1/models", None)
             latency = (time.perf_counter() - start_time) * 1000.0
             return ProviderHealth(
                 status="healthy",
@@ -226,7 +313,7 @@ class JevDriver(DecisionProvider):
             return ProviderHealth(
                 status="unhealthy",
                 latency_ms=round(latency, 2),
-                message=f"Jev health check failed: {str(exc)}",
+                message=f"TypeSafe health check failed: {str(exc)}",
             )
 
     async def close(self) -> None:
