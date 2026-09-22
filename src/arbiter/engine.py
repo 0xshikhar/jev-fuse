@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 import time
@@ -10,7 +11,8 @@ import uuid
 from typing import Any, Sequence
 
 from arbiter.batch.batcher import MicroBatcher
-from arbiter.cache.hasher import compute_input_hash
+from arbiter.cache.hasher import compute_input_hash, compute_systemone_hash
+from arbiter.cache.singleflight import AsyncSingleflight
 from arbiter.cache.store import CompositeCache
 from arbiter.log.models import DecisionRecord
 from arbiter.log.reader import DecisionLogReader
@@ -21,6 +23,7 @@ from arbiter.provider.base import DecisionProvider, ProviderHealth
 from arbiter.provider.jev import JevDriver
 from arbiter.schema.decision import Action, DecisionKind, DecisionRequest, DecisionResponse
 from arbiter.schema.internal import NormalizedRequest, RawScore
+from arbiter.schema.systemone import SystemOneRequest, SystemOneResponse, Usage
 
 logger = logging.getLogger(__name__)
 
@@ -119,6 +122,9 @@ class ArbiterEngine:
         self.db_path = db_path
         self.log_writer = log_writer or DecisionLogWriter(db_path=db_path)
         self.log_reader = DecisionLogReader(db_path=db_path)
+
+        # 6. Singleflight Concurrency Coalescer
+        self.singleflight = AsyncSingleflight()
 
         self._started = False
 
@@ -286,87 +292,209 @@ class ArbiterEngine:
 
         return response
 
-    async def systemone(self, payload: dict[str, Any]) -> dict[str, Any]:
-        """TypeSafe Jev 100% drop-in endpoint compatibility (POST /v1/systemone)."""
-        state = payload.get("state", "")
-        questions: dict[str, Any] = payload.get("questions", {})
+    async def systemone(
+        self,
+        payload: dict[str, Any] | SystemOneRequest,
+        auth_header: str | None = None,
+    ) -> SystemOneResponse:
+        """
+        TypeSafe Jev 100% drop-in endpoint compatibility (POST /v1/systemone).
+        Implements Trojan Horse proxy mode with singleflight coalescing,
+        governed margin overlay, and full-fidelity SQLite logging.
+        """
+        if not self._started:
+            await self.start()
+
+        if isinstance(payload, SystemOneRequest):
+            req = payload
+        else:
+            req = SystemOneRequest.model_validate(payload)
+
+        model = req.model
+        state = req.state
+        questions = req.questions
 
         t0 = time.monotonic()
-        answers: dict[str, Any] = {}
+        sys_hash = compute_systemone_hash(model, state, questions)
+        trace_id = str(uuid.uuid4())
 
-        # Execute all questions concurrently through Arbiter's engine
-        async def evaluate_question(q_key: str, q_spec: dict[str, Any]) -> tuple[str, dict[str, Any]]:
-            q_type = q_spec.get("type", "noul")
-            instructions = q_spec.get("instructions", "")
-            criteria = q_spec.get("criteria")
+        # 1. Check Cache
+        cached_entry = await self.cache.get(sys_hash)
+        if cached_entry is not None:
+            cached_data = cached_entry.raw_score if isinstance(cached_entry.raw_score, dict) else (cached_entry.raw_score.model_dump() if hasattr(cached_entry.raw_score, "model_dump") else None)
+            if cached_data is not None:
+                res = SystemOneResponse.model_validate(cached_data)
+                elapsed_ms = round((time.monotonic() - t0) * 1000.0, 3)
+                res.latency_ms = elapsed_ms
+            self.log_writer.log(
+                DecisionRecord(
+                    trace_id=trace_id,
+                    task="systemone",
+                    client_id="proxy",
+                    provider="cache",
+                    input_hash=sys_hash,
+                    input_preview=str(state)[:500],
+                    decision_value=json.dumps(res.answers, ensure_ascii=False),
+                    raw_score=0.0,
+                    confidence=1.0,
+                    action=Action.ALLOW,
+                    latency_ms=elapsed_ms,
+                    cached=True,
+                    model=res.model,
+                    questions_json=json.dumps(questions, ensure_ascii=False),
+                    answers_json=json.dumps(res.answers, ensure_ascii=False),
+                    input_tokens=res.usage.input_tokens,
+                    output_tokens=res.usage.output_tokens,
+                    status="success",
+                )
+            )
+            return res
 
-            if q_type == "choice":
-                choices_list: list[str] = []
-                if isinstance(criteria, dict):
-                    choices_list = list(criteria.keys())
-                elif isinstance(criteria, list):
-                    choices_list = [str(c) for c in criteria]
+        # 2. Upstream execution through singleflight
+        async def execute_upstream() -> SystemOneResponse:
+            if hasattr(self.provider, "system_one"):
+                return await self.provider.system_one(req, auth_header=auth_header)
+
+            # Fallback for generic providers (e.g. MockDeterministicProvider)
+            batch: list[NormalizedRequest] = []
+            for q_key, q_spec in questions.items():
+                q_type = q_spec.get("type", "noul") if isinstance(q_spec, dict) else getattr(q_spec, "type", "noul")
+                kind = DecisionKind.CHOICE if q_type == "choice" else (DecisionKind.SCORE if q_type == "score" else DecisionKind.BOOL)
+                choices_tuple = None
+                if kind == DecisionKind.CHOICE and isinstance(q_spec, dict) and "criteria" in q_spec:
+                    crit = q_spec["criteria"]
+                    choices_tuple = tuple(crit.keys()) if isinstance(crit, dict) else tuple(str(c) for c in crit)
+                batch.append(
+                    NormalizedRequest(
+                        trace_id=str(uuid.uuid4()),
+                        task=q_key,
+                        kind=kind,
+                        input=str(state),
+                        choices=choices_tuple,
+                        client_id="systemone-proxy",
+                        provider=self.provider.name,
+                        input_hash=sys_hash,
+                        timestamp_ns=time.time_ns(),
+                    )
+                )
+            raw_scores = await self.provider.infer(batch)
+            answers: dict[str, Any] = {}
+            for b_req, r_score in zip(batch, raw_scores):
+                if b_req.kind == DecisionKind.CHOICE:
+                    answers[b_req.task] = {
+                        "type": "choice",
+                        "choice": str(r_score.value),
+                        "confidence": r_score.raw_score,
+                        "probabilities": r_score.candidate_scores or {str(r_score.value): r_score.raw_score},
+                    }
+                elif b_req.kind == DecisionKind.SCORE:
+                    answers[b_req.task] = {
+                        "type": "score",
+                        "score": float(r_score.value),
+                        "confidence": r_score.raw_score,
+                        "legend": {},
+                        "probabilities": r_score.candidate_scores or {},
+                    }
                 else:
-                    choices_list = ["option_a", "option_b"]
+                    answers[b_req.task] = {
+                        "type": "noul",
+                        "noul": float(r_score.raw_score),
+                    }
+            return SystemOneResponse(
+                model=getattr(self.provider, "model", "jev-latest"),
+                answers=answers,
+                usage=Usage(input_tokens=len(str(state).split()) + 50, output_tokens=len(answers)),
+            )
 
-                req = DecisionRequest(
-                    task=f"systemone-{q_key}",
-                    kind=DecisionKind.CHOICE,
-                    input=f"{instructions}\n\nState: {state}",
-                    choices=choices_list,
+        provider_err: str | None = None
+        try:
+            sys_res = await self.singleflight.run(sys_hash, execute_upstream)
+        except Exception as exc:
+            provider_err = str(exc)
+            elapsed_ms = round((time.monotonic() - t0) * 1000.0, 3)
+            self.log_writer.log(
+                DecisionRecord(
+                    trace_id=trace_id,
+                    task="systemone",
+                    client_id="proxy",
+                    provider=self.provider.name,
+                    input_hash=sys_hash,
+                    input_preview=str(state)[:500],
+                    decision_value="error",
+                    raw_score=0.0,
+                    confidence=0.0,
+                    action=Action.ASK,
+                    latency_ms=elapsed_ms,
+                    cached=False,
+                    model=model,
+                    questions_json=json.dumps(questions, ensure_ascii=False),
+                    answers_json="{}",
+                    status="error",
+                    reason=provider_err,
                 )
-            elif q_type == "score":
-                req = DecisionRequest(
-                    task=f"systemone-{q_key}",
-                    kind=DecisionKind.SCORE,
-                    input=f"{instructions}\n\nState: {state}",
-                )
-            else:  # noul (boolean probability)
-                req = DecisionRequest(
-                    task=f"systemone-{q_key}",
-                    kind=DecisionKind.BOOL,
-                    input=f"{instructions}\n\nState: {state}",
-                )
+            )
+            raise
 
-            res = await self.decide(req)
+        # 3. Governed margin overlay (abstention on close probabilities)
+        governed_overlay: dict[str, Any] = {}
+        overall_action = Action.ALLOW
+        for q_key, ans_dict in sys_res.answers.items():
+            ans_type = ans_dict.get("type") if isinstance(ans_dict, dict) else getattr(ans_dict, "type", None)
+            if ans_type == "choice":
+                probs = ans_dict.get("probabilities", {}) if isinstance(ans_dict, dict) else getattr(ans_dict, "probabilities", {})
+                if isinstance(probs, dict) and len(probs) >= 2:
+                    sorted_p = sorted(probs.values(), reverse=True)
+                    margin = round(sorted_p[0] - sorted_p[1], 4)
+                    if margin < 0.15:  # Choice margin threshold
+                        if isinstance(ans_dict, dict):
+                            ans_dict["action"] = Action.ASK.value
+                            ans_dict["margin"] = margin
+                            ans_dict["reason"] = f"Choice margin {margin} below deadband 0.15"
+                        governed_overlay[q_key] = {"action": Action.ASK.value, "margin": margin}
+                        overall_action = Action.ASK
+            elif ans_type == "noul":
+                noul = float(ans_dict.get("noul", 0.5) if isinstance(ans_dict, dict) else getattr(ans_dict, "noul", 0.5))
+                if abs(noul - 0.5) < 0.10:  # Deadband [0.40, 0.60]
+                    if isinstance(ans_dict, dict):
+                        ans_dict["action"] = Action.ASK.value
+                        ans_dict["reason"] = f"Noul probability {noul} within uncertainty band [0.40, 0.60]"
+                    governed_overlay[q_key] = {"action": Action.ASK.value, "noul": noul}
+                    overall_action = Action.ASK
 
-            if q_type == "choice":
-                return q_key, {
-                    "type": "choice",
-                    "choice": str(res.value),
-                    "probabilities": {str(res.value): res.confidence},
-                    "confidence": res.confidence,
-                    "action": res.action.value,
-                }
-            elif q_type == "score":
-                return q_key, {
-                    "type": "score",
-                    "score": float(res.value) if isinstance(res.value, (int, float)) else res.raw_score,
-                    "confidence": res.confidence,
-                    "action": res.action.value,
-                }
-            else:  # noul
-                return q_key, {
-                    "type": "noul",
-                    "noul": res.confidence,
-                    "confidence": res.confidence,
-                    "action": res.action.value,
-                }
+        if governed_overlay:
+            sys_res.governed = governed_overlay
 
-        results = await asyncio.gather(*(evaluate_question(k, v) for k, v in questions.items()))
-        for k, ans in results:
-            answers[k] = ans
+        elapsed_ms = round((time.monotonic() - t0) * 1000.0, 3)
+        sys_res.latency_ms = elapsed_ms
 
-        elapsed_ms = round((time.monotonic() - t0) * 1000.0, 2)
-        total_tokens = len(state.split()) + 50
+        # 4. Cache successful response
+        await self.cache.set(sys_hash, sys_res.model_dump(mode="json"), self.provider.name)
 
-        return {
-            "model": f"arbiter-{self.provider.name}",
-            "answers": answers,
-            "usage": {"input_tokens": total_tokens, "output_tokens": 0},
-            "routing": {"model": self.provider.name, "reason": "arbiter-governed"},
-            "latency_ms": elapsed_ms,
-        }
+        # 5. Full-fidelity SQLite decision logging
+        self.log_writer.log(
+            DecisionRecord(
+                trace_id=trace_id,
+                task="systemone",
+                client_id="proxy",
+                provider=self.provider.name,
+                input_hash=sys_hash,
+                input_preview=str(state)[:500],
+                decision_value=json.dumps(sys_res.answers, ensure_ascii=False),
+                raw_score=0.0,
+                confidence=1.0,
+                action=overall_action,
+                latency_ms=elapsed_ms,
+                cached=False,
+                model=sys_res.model,
+                questions_json=json.dumps(questions, ensure_ascii=False),
+                answers_json=json.dumps(sys_res.answers, ensure_ascii=False),
+                input_tokens=sys_res.usage.input_tokens,
+                output_tokens=sys_res.usage.output_tokens,
+                status="success",
+            )
+        )
+
+        return sys_res
 
     async def record_feedback(self, trace_id: str, label: str) -> bool:
         """Record ground truth human label for active learning and calibration."""

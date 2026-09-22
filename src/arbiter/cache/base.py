@@ -1,19 +1,22 @@
-"""Base models and protocols for decision caching."""
-
 import time
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, Union, runtime_checkable
 from pydantic import BaseModel, Field
 
 from arbiter.schema.internal import RawScore
 
 
 class CacheEntry(BaseModel):
-    """Cached decision raw score with TTL metadata."""
+    """Cached decision raw score or payload with TTL metadata."""
     input_hash: str = Field(..., description="SHA-256 fingerprint")
-    raw_score: RawScore = Field(..., description="Cached model output")
+    raw_score: Union[RawScore, dict[str, Any], Any] = Field(..., description="Cached model output")
     provider: str = Field(..., description="Originating provider (e.g. 'jev', 'laya-mlx')")
     created_at_ns: int = Field(..., description="Creation timestamp in nanoseconds")
     expires_at_ns: int = Field(..., description="Expiration timestamp in nanoseconds")
+
+    @property
+    def value(self) -> Any:
+        """Alias for raw_score for convenient generic access."""
+        return self.raw_score
 
     def is_expired(self, now_ns: int | None = None) -> bool:
         """Check if entry has passed its TTL."""
@@ -32,11 +35,11 @@ class CacheStore(Protocol):
     async def set(
         self,
         input_hash: str,
-        raw_score: RawScore,
+        raw_score: Union[RawScore, dict[str, Any], Any],
         provider: str,
         ttl_seconds: float = 3600.0,
     ) -> None:
-        """Store raw score with given TTL."""
+        """Store raw score or payload with given TTL."""
         ...
 
     async def delete(self, input_hash: str) -> None:

@@ -2,6 +2,7 @@
 
 import asyncio
 from collections import OrderedDict
+import json
 import time
 from pathlib import Path
 from typing import Any
@@ -123,7 +124,11 @@ class SQLiteCacheStore(CacheStore):
             if row is None:
                 return None
 
-            raw_score = RawScore.model_validate_json(row["raw_score_json"])
+            try:
+                raw_score = RawScore.model_validate_json(row["raw_score_json"])
+            except Exception:
+                raw_score = json.loads(row["raw_score_json"])
+
             return CacheEntry(
                 input_hash=row["input_hash"],
                 raw_score=raw_score,
@@ -135,7 +140,7 @@ class SQLiteCacheStore(CacheStore):
     async def set(
         self,
         input_hash: str,
-        raw_score: RawScore,
+        raw_score: Any,
         provider: str,
         ttl_seconds: float = 3600.0,
     ) -> None:
@@ -151,12 +156,13 @@ class SQLiteCacheStore(CacheStore):
             created_at_ns = excluded.created_at_ns,
             expires_at_ns = excluded.expires_at_ns
         """
+        score_json = raw_score.model_dump_json() if hasattr(raw_score, "model_dump_json") else json.dumps(raw_score, ensure_ascii=False)
         await db.execute(
             query,
             (
                 input_hash,
                 provider,
-                raw_score.model_dump_json(),
+                score_json,
                 now_ns,
                 expires_at_ns,
             ),

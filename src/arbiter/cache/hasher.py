@@ -57,3 +57,29 @@ def hash_normalized_request(req: NormalizedRequest) -> str:
         input_text=req.input,
         choices=req.choices,
     )
+
+
+def compute_systemone_hash(model: str, state: Any, questions: dict[str, Any]) -> str:
+    """
+    Compute a deterministic SHA-256 fingerprint for a SystemOne request.
+    
+    Hash structure:
+        sha256(model || \x00 || canonical_state || \x00 || canonical_questions)
+    """
+    hasher = hashlib.sha256()
+    hasher.update(model.strip().lower().encode("utf-8"))
+    hasher.update(b"\x00")
+
+    # Canonicalize state
+    if isinstance(state, str):
+        state_bytes = canonicalize_text(state).encode("utf-8")
+    else:
+        state_bytes = json.dumps(state, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    hasher.update(state_bytes)
+    hasher.update(b"\x00")
+
+    # Canonicalize questions
+    questions_bytes = json.dumps(questions, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    hasher.update(questions_bytes)
+
+    return hasher.hexdigest()
