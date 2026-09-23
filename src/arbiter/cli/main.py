@@ -16,7 +16,7 @@ from arbiter.server.app import create_app
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="jev-arbiter",
+        prog="jev-fuse",
         description="Jev Arbiter: Governed decision runtime, policy control plane, and MCP supervisor for TypeSafe Jev & local models.",
     )
     subparsers = parser.add_subparsers(dest="subcommand", help="Available subcommands")
@@ -33,6 +33,11 @@ def build_parser() -> argparse.ArgumentParser:
     # arbiter guard
     guard_parser = subparsers.add_parser("guard", help="Evaluate safety of a bash command")
     guard_parser.add_argument("command", nargs="+", help="Shell command to evaluate")
+
+    # arbiter hook
+    hook_parser = subparsers.add_parser("hook", help="Run Claude Code agent hooks")
+    hook_subparsers = hook_parser.add_subparsers(dest="hook_type", help="Hook event type")
+    hook_subparsers.add_parser("pre-tool-use", help="Claude Code PreToolUse hook")
 
     # arbiter prune
     prune_parser = subparsers.add_parser("prune", help="Compact a conversation history file")
@@ -56,9 +61,17 @@ def main() -> None:
         # Run stdio async loop
         asyncio.run(server.run_stdio_async())
 
+    elif args.subcommand == "hook":
+        if args.hook_type == "pre-tool-use":
+            from arbiter.hook.pre_tool_use import run_hook
+            asyncio.run(run_hook())
+        else:
+            parser.print_help()
+
     elif args.subcommand == "guard":
+        from arbiter.guard.classifier import evaluate_shell_command
         cmd_str = " ".join(args.command)
-        verdict = asyncio.run(evaluate_command(cmd_str))
+        verdict = asyncio.run(evaluate_shell_command(cmd_str))
         print(f"\n[Arbiter Guard Verdict]")
         print(f"  Command:    {verdict.command}")
         print(f"  Action:     {verdict.action.value.upper()}")

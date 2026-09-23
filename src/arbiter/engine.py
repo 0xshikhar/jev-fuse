@@ -326,29 +326,51 @@ class ArbiterEngine:
                 res = SystemOneResponse.model_validate(cached_data)
                 elapsed_ms = round((time.monotonic() - t0) * 1000.0, 3)
                 res.latency_ms = elapsed_ms
-            self.log_writer.log(
-                DecisionRecord(
-                    trace_id=trace_id,
-                    task="systemone",
-                    client_id="proxy",
-                    provider="cache",
-                    input_hash=sys_hash,
-                    input_preview=str(state)[:500],
-                    decision_value=json.dumps(res.answers, ensure_ascii=False),
-                    raw_score=0.0,
-                    confidence=1.0,
-                    action=Action.ALLOW,
-                    latency_ms=elapsed_ms,
-                    cached=True,
-                    model=res.model,
-                    questions_json=json.dumps(questions, ensure_ascii=False),
-                    answers_json=json.dumps(res.answers, ensure_ascii=False),
-                    input_tokens=res.usage.input_tokens,
-                    output_tokens=res.usage.output_tokens,
-                    status="success",
+
+                # Preserve stored governed overlay action and compute real confidence
+                cached_action = Action.ALLOW
+                confidences: list[float] = []
+                for ans in res.answers.values():
+                    ans_dict = ans if isinstance(ans, dict) else (ans.model_dump() if hasattr(ans, "model_dump") else {})
+                    ans_action = ans_dict.get("action")
+                    if ans_action == Action.DENY.value:
+                        cached_action = Action.DENY
+                    elif ans_action == Action.ASK.value and cached_action != Action.DENY:
+                        cached_action = Action.ASK
+                    if "confidence" in ans_dict and ans_dict["confidence"] is not None:
+                        confidences.append(float(ans_dict["confidence"]))
+                    elif "noul" in ans_dict and ans_dict["noul"] is not None:
+                        confidences.append(float(ans_dict["noul"]))
+
+                avg_conf = round(sum(confidences) / len(confidences), 4) if confidences else 1.0
+
+                dumped_cached = res.model_dump(mode="json")
+                cached_answers_dump = dumped_cached.get("answers", {})
+                cached_answers_json = json.dumps(cached_answers_dump, ensure_ascii=False)
+
+                self.log_writer.log(
+                    DecisionRecord(
+                        trace_id=trace_id,
+                        task="systemone",
+                        client_id="proxy",
+                        provider="cache",
+                        input_hash=sys_hash,
+                        input_preview=str(state)[:500],
+                        decision_value=cached_answers_json,
+                        raw_score=0.0,
+                        confidence=avg_conf,
+                        action=cached_action,
+                        latency_ms=elapsed_ms,
+                        cached=True,
+                        model=res.model,
+                        questions_json=json.dumps(questions, ensure_ascii=False),
+                        answers_json=cached_answers_json,
+                        input_tokens=res.usage.input_tokens,
+                        output_tokens=res.usage.output_tokens,
+                        status="success",
+                    )
                 )
-            )
-            return res
+                return res
 
         # 2. Upstream execution through singleflight
         async def execute_upstream() -> SystemOneResponse:
@@ -450,6 +472,10 @@ class ArbiterEngine:
                             ans_dict["action"] = Action.ASK.value
                             ans_dict["margin"] = margin
                             ans_dict["reason"] = f"Choice margin {margin} below deadband 0.15"
+                        else:
+                            ans_dict.action = Action.ASK
+                            ans_dict.margin = margin
+                            ans_dict.reason = f"Choice margin {margin} below deadband 0.15"
                         governed_overlay[q_key] = {"action": Action.ASK.value, "margin": margin}
                         overall_action = Action.ASK
             elif ans_type == "noul":
@@ -458,6 +484,9 @@ class ArbiterEngine:
                     if isinstance(ans_dict, dict):
                         ans_dict["action"] = Action.ASK.value
                         ans_dict["reason"] = f"Noul probability {noul} within uncertainty band [0.40, 0.60]"
+                    else:
+                        ans_dict.action = Action.ASK
+                        ans_dict.reason = f"Noul probability {noul} within uncertainty band [0.40, 0.60]"
                     governed_overlay[q_key] = {"action": Action.ASK.value, "noul": noul}
                     overall_action = Action.ASK
 
@@ -468,7 +497,11 @@ class ArbiterEngine:
         sys_res.latency_ms = elapsed_ms
 
         # 4. Cache successful response
-        await self.cache.set(sys_hash, sys_res.model_dump(mode="json"), self.provider.name)
+        dumped_res = sys_res.model_dump(mode="json")
+        await self.cache.set(sys_hash, dumped_res, self.provider.name)
+
+        answers_dump = dumped_res.get("answers", {})
+        answers_json_str = json.dumps(answers_dump, ensure_ascii=False)
 
         # 5. Full-fidelity SQLite decision logging
         self.log_writer.log(
@@ -479,7 +512,7 @@ class ArbiterEngine:
                 provider=self.provider.name,
                 input_hash=sys_hash,
                 input_preview=str(state)[:500],
-                decision_value=json.dumps(sys_res.answers, ensure_ascii=False),
+                decision_value=answers_json_str,
                 raw_score=0.0,
                 confidence=1.0,
                 action=overall_action,
@@ -487,7 +520,7 @@ class ArbiterEngine:
                 cached=False,
                 model=sys_res.model,
                 questions_json=json.dumps(questions, ensure_ascii=False),
-                answers_json=json.dumps(sys_res.answers, ensure_ascii=False),
+                answers_json=answers_json_str,
                 input_tokens=sys_res.usage.input_tokens,
                 output_tokens=sys_res.usage.output_tokens,
                 status="success",

@@ -41,6 +41,12 @@ htmlcov/
 *.db
 *.db-wal
 *.db-shm
+*.duckdb
+decisions.db*
+
+# External reference repositories (other projects)
+repo/
 
 # macOS
 .DS_Store
+

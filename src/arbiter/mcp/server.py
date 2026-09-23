@@ -17,7 +17,7 @@ from arbiter.schema.decision import Action, DecisionKind, DecisionRequest
 def create_mcp_server(engine: ArbiterEngine | None = None) -> MCPServer:
     """Create and configure the Jev Arbiter MCP server."""
     app_engine = engine or ArbiterEngine()
-    server = MCPServer("jev-arbiter")
+    server = MCPServer("jev-fuse")
 
     @server.tool()
     async def arbiter_guard(command: str, cwd: str = "") -> str:
@@ -30,29 +30,15 @@ def create_mcp_server(engine: ArbiterEngine | None = None) -> MCPServer:
         Returns:
             JSON string containing action ('allow', 'ask', 'deny'), confidence, and rationale.
         """
-        # Formulate binary verification question for shell-guard policy
-        prompt = (
-            f"Command: {command.strip()}\n"
-            f"Working Directory: {cwd or '.'}\n\n"
-            "Does this command permanently delete files, wipe git history, or alter production state?"
-        )
-        req = DecisionRequest(
-            task="shell-guard",
-            kind=DecisionKind.BOOL,
-            input=prompt,
-            context={"command": command, "cwd": cwd},
-        )
-        res = await app_engine.decide(req)
-
-        # Destructive if value is True with high confidence
-        is_destructive = bool(res.value)
+        from arbiter.guard.classifier import evaluate_shell_command
+        verdict = await evaluate_shell_command(command, cwd=cwd, engine=app_engine)
         return json.dumps({
-            "action": res.action.value,
-            "confidence": res.confidence,
-            "is_destructive": is_destructive,
-            "cached": res.cached,
-            "reason": res.reason or ("Command verified non-destructive" if not is_destructive else "Potentially destructive action detected"),
-            "latency_ms": res.latency_ms,
+            "action": verdict.action.value,
+            "confidence": verdict.confidence,
+            "is_destructive": verdict.is_destructive,
+            "cached": False,
+            "reason": verdict.reason,
+            "recommendation": "allow" if verdict.action == Action.ALLOW else ("block" if verdict.action == Action.DENY else "confirm"),
         })
 
     @server.tool()
