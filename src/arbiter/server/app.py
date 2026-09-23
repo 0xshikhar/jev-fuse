@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 
 from arbiter.engine import ArbiterEngine
 from arbiter.policy.schema import PolicyDefinition
+from arbiter.provider.exceptions import ProviderError
 from arbiter.schema.decision import DecisionRequest, DecisionResponse
 
 
@@ -106,6 +107,21 @@ def create_app(engine: ArbiterEngine | None = None) -> FastAPI:
             return sys_res.model_dump(mode="json")
         except HTTPException:
             raise
+        except ProviderError as pe:
+            if pe.status_code is not None:
+                import json
+                content = pe.raw_body if pe.raw_body is not None else json.dumps({"detail": pe.message}).encode()
+                media_type = "application/json"
+                resp_headers: dict[str, str] = {}
+                if hasattr(pe, "retry_after") and pe.retry_after is not None:
+                    resp_headers["Retry-After"] = str(int(pe.retry_after))
+                return Response(
+                    content=content,
+                    status_code=pe.status_code,
+                    media_type=media_type,
+                    headers=resp_headers or None,
+                )
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=pe.message)
         except Exception as e:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
@@ -113,16 +129,18 @@ def create_app(engine: ArbiterEngine | None = None) -> FastAPI:
     @app.get("/models", tags=["TypeSafe Compatibility"])
     async def list_models() -> dict[str, Any]:
         """Available models list matching TypeSafe API contract."""
+        if hasattr(app_engine.provider, "list_models"):
+            return await app_engine.provider.list_models()
         return {
             "models": [
                 {
                     "name": "jev-latest",
-                    "description": "General-purpose system one model running via Arbiter Trojan Horse Proxy",
+                    "description": "General-purpose system one model running via Arbiter Trojan Horse Proxy (stub)",
                     "release_date": "2026-09-15",
                 },
                 {
                     "name": "jev-1.13.0",
-                    "description": "Pinned jev-1.13.0 model running via Arbiter",
+                    "description": "Pinned jev-1.13.0 model running via Arbiter (stub)",
                     "release_date": "2026-09-01",
                 },
             ]

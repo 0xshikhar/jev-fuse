@@ -112,7 +112,10 @@ class JevDriver(DecisionProvider):
                 # Check 401/403 auth issues
                 if response.status_code in (401, 403):
                     raise ProviderAuthenticationError(
-                        f"TypeSafe API rejected credentials (status {response.status_code}): {response.text}"
+                        f"TypeSafe API rejected credentials (status {response.status_code}): {response.text}",
+                        status_code=response.status_code,
+                        raw_body=response.content,
+                        headers=dict(response.headers),
                     )
 
                 # Check 429 rate limit
@@ -124,6 +127,9 @@ class JevDriver(DecisionProvider):
                         raise RateLimitExceededError(
                             f"TypeSafe API rate limit exceeded after {self._max_retries} retries",
                             retry_after=retry_after,
+                            status_code=429,
+                            raw_body=response.content,
+                            headers=dict(response.headers),
                         )
                     sleep_time = (backoff_base * (2 ** (attempt - 1))) + random.uniform(0.01, 0.05)
                     await asyncio.sleep(sleep_time)
@@ -134,7 +140,10 @@ class JevDriver(DecisionProvider):
                     attempt += 1
                     if attempt > self._max_retries:
                         raise ProviderUnavailableError(
-                            f"TypeSafe API unavailable (status {response.status_code}): {response.text}"
+                            f"TypeSafe API unavailable (status {response.status_code}): {response.text}",
+                            status_code=response.status_code,
+                            raw_body=response.content,
+                            headers=dict(response.headers),
                         )
                     sleep_time = (backoff_base * (2 ** (attempt - 1))) + random.uniform(0.01, 0.05)
                     await asyncio.sleep(sleep_time)
@@ -145,6 +154,9 @@ class JevDriver(DecisionProvider):
                     raise ProviderError(
                         f"TypeSafe API client error (status {response.status_code}): {response.text}",
                         error_code="validation_error",
+                        status_code=response.status_code,
+                        raw_body=response.content,
+                        headers=dict(response.headers),
                     )
 
                 response.raise_for_status()
@@ -295,6 +307,26 @@ class JevDriver(DecisionProvider):
             return self._parse_answer_to_raw_score(sys_res.answers.get(q_key, {}), r.kind)
 
         return await asyncio.gather(*(evaluate_single(r) for r in batch))
+
+    async def list_models(self) -> dict[str, Any]:
+        """Proxy models list from TypeSafe API, or return documented supported models."""
+        try:
+            return await self._send_with_retries("GET", "/v1/models", None)
+        except Exception:
+            return {
+                "models": [
+                    {
+                        "name": "jev-latest",
+                        "description": "General-purpose system one model running via Arbiter Trojan Horse Proxy",
+                        "release_date": "2026-09-15",
+                    },
+                    {
+                        "name": "jev-1.13.0",
+                        "description": "Pinned jev-1.13.0 model running via Arbiter",
+                        "release_date": "2026-09-01",
+                    },
+                ]
+            }
 
     async def health(self) -> ProviderHealth:
         """Probe TypeSafe API liveness via GET /v1/models and report latency."""

@@ -25,6 +25,12 @@ class ChoiceAnswer(BaseModel):
     margin: float | None = Field(default=None, description="Margin between top and runner-up probability.")
     reason: str | None = Field(default=None, description="Explanation for policy action.")
 
+    def __getitem__(self, item: str) -> Any:
+        return getattr(self, item)
+
+    def get(self, item: str, default: Any = None) -> Any:
+        return getattr(self, item, default)
+
 
 class NoulCriteria(BaseModel):
     """Criteria clarifying what counts as a yes (true) or no (false) answer."""
@@ -43,6 +49,12 @@ class NoulAnswer(BaseModel):
     confidence: float | None = Field(default=None, description="Distance from uncertainty 0.5.")
     action: Action | None = Field(default=None, description="Governed policy action if evaluated.")
     reason: str | None = Field(default=None, description="Explanation for policy action.")
+
+    def __getitem__(self, item: str) -> Any:
+        return getattr(self, item)
+
+    def get(self, item: str, default: Any = None) -> Any:
+        return getattr(self, item, default)
 
 
 class ScoreAnswer(BaseModel):
@@ -64,6 +76,12 @@ class ScoreAnswer(BaseModel):
     # Arbiter Governed Overlay extensions
     action: Action | None = Field(default=None, description="Governed policy action if evaluated.")
     reason: str | None = Field(default=None, description="Explanation for policy action.")
+
+    def __getitem__(self, item: str) -> Any:
+        return getattr(self, item)
+
+    def get(self, item: str, default: Any = None) -> Any:
+        return getattr(self, item, default)
 
 
 Answer = Annotated[Union[NoulAnswer, ChoiceAnswer, ScoreAnswer], Field(discriminator="type")]
