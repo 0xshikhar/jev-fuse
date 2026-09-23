@@ -177,7 +177,7 @@ async def test_rest_feedback_and_metrics_dashboard(test_engine: ArbiterEngine) -
         # Check HTML dashboard
         dash_resp = await client.get("/dashboard")
         assert dash_resp.status_code == 200
-        assert "Arbiter Control Plane" in dash_resp.text
+        assert "JEV-Fuse Control Plane" in dash_resp.text
 
 
 @pytest.mark.asyncio
@@ -187,13 +187,13 @@ async def test_native_mcp_tools(test_engine: ArbiterEngine) -> None:
     tools = await server.list_tools()
     tool_names = [t.name for t in tools]
 
-    assert "arbiter_guard" in tool_names
-    assert "arbiter_prune" in tool_names
-    assert "arbiter_verify" in tool_names
-    assert "arbiter_route" in tool_names
+    assert "fuse_guard" in tool_names
+    assert "fuse_prune" in tool_names
+    assert "fuse_verify" in tool_names
+    assert "fuse_route" in tool_names
 
-    # Test arbiter_guard tool call directly
-    res = await server.call_tool("arbiter_guard", {"command": "git status"})
+    # Test fuse_guard tool call directly
+    res = await server.call_tool("fuse_guard", {"command": "git status"})
     assert res.content and len(res.content) > 0
     result = json.loads(res.content[0].text)
     assert result["action"] in ("allow", "ask", "deny")
