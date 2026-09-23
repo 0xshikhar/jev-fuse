@@ -1,0 +1,16 @@
+{
+  "name": "jev-fuse",
+  "description": "Governed decision runtime, policy control plane, and MCP supervisor for TypeSafe Jev and local typed-decision models.",
+  "owner": {
+    "name": "0xshikhar",
+    "url": "https://github.com/0xshikhar/jev-fuse"
+  },
+  "plugins": [
+    {
+      "name": "jev-fuse",
+      "description": "Decision runtime, bash auto-approval gate, and context compactor for coding agents.",
+      "version": "0.1.0",
+      "source": "https://github.com/0xshikhar/jev-fuse"
+    }
+  ]
+}

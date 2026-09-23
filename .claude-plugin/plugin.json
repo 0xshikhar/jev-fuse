@@ -1,0 +1,12 @@
+{
+  "name": "jev-fuse",
+  "version": "0.1.0",
+  "description": "Governed decision runtime, policy control plane, and MCP supervisor for TypeSafe Jev and local typed-decision models.",
+  "author": {
+    "name": "0xshikhar",
+    "url": "https://github.com/0xshikhar/jev-fuse"
+  },
+  "homepage": "https://github.com/0xshikhar/jev-fuse",
+  "repository": "https://github.com/0xshikhar/jev-fuse",
+  "license": "Apache-2.0"
+}
