@@ -132,7 +132,7 @@ class DecisionLogWriter:
                 break
             except Exception as exc:
                 import sys
-                print(f"[Arbiter DecisionLogWriter Error] {exc}", file=sys.stderr)
+                print(f"[JEV-Fuse DecisionLogWriter Error] {exc}", file=sys.stderr)
 
         # Flush any remaining items before exiting
         if batch:
@@ -157,7 +157,7 @@ class DecisionLogWriter:
             self._queue.put_nowait(record)
         except asyncio.QueueFull:
             import sys
-            print(f"[Arbiter Warning] Decision log queue is full! Dropping trace {record.trace_id}", file=sys.stderr)
+            print(f"[JEV-Fuse Warning] Decision log queue is full! Dropping trace {record.trace_id}", file=sys.stderr)
 
     async def log_async(self, record: DecisionRecord) -> None:
         """Coroutine version waiting for space if queue is full."""

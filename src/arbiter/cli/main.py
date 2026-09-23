@@ -7,17 +7,15 @@ import asyncio
 import json
 import sys
 
-from arbiter.engine import ArbiterEngine
 from arbiter.mcp.server import create_mcp_server
-from arbiter.recipes.guard import evaluate_command
 from arbiter.recipes.prune import compact_context
 from arbiter.server.app import create_app
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="jev-fuse",
-        description="Jev Arbiter: Governed decision runtime, policy control plane, and MCP supervisor for TypeSafe Jev & local models.",
+        prog="jevfuse",
+        description="JEV Fuse: Governed decision runtime, safety gate, and audit plane for TypeSafe Jev & local models.",
     )
     subparsers = parser.add_subparsers(dest="subcommand", help="Available subcommands")
 
@@ -28,7 +26,7 @@ def build_parser() -> argparse.ArgumentParser:
     serve_parser.add_argument("--reload", action="store_true", help="Enable auto-reload for development")
 
     # arbiter mcp
-    mcp_parser = subparsers.add_parser("mcp", help="Run the Model Context Protocol stdio server")
+    subparsers.add_parser("mcp", help="Run the Model Context Protocol stdio server")
 
     # arbiter guard
     guard_parser = subparsers.add_parser("guard", help="Evaluate safety of a bash command")
@@ -72,7 +70,7 @@ def main() -> None:
         from arbiter.guard.classifier import evaluate_shell_command
         cmd_str = " ".join(args.command)
         verdict = asyncio.run(evaluate_shell_command(cmd_str))
-        print(f"\n[Arbiter Guard Verdict]")
+        print("\n[JEV Fuse Guard Verdict]")
         print(f"  Command:    {verdict.command}")
         print(f"  Action:     {verdict.action.value.upper()}")
         print(f"  Confidence: {verdict.confidence:.2f}")

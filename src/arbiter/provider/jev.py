@@ -77,7 +77,7 @@ class JevDriver(DecisionProvider):
                 limits=httpx.Limits(max_keepalive_connections=20, max_connections=50),
                 headers={
                     "Authorization": f"Bearer {self._api_key}",
-                    "User-Agent": "arbiter-runtime/0.1.0 (TypeSafe-Proxy)",
+                    "User-Agent": "jev-fuse/0.1.0 (TypeSafe-Proxy)",
                     "Content-Type": "application/json",
                 },
             )
@@ -101,7 +101,7 @@ class JevDriver(DecisionProvider):
         auth = custom_auth or f"Bearer {self._api_key}"
         headers = {
             "Authorization": auth,
-            "User-Agent": "arbiter-runtime/0.1.0",
+            "User-Agent": "jev-fuse/0.1.0",
             "Content-Type": "application/json",
         }
 
@@ -317,12 +317,12 @@ class JevDriver(DecisionProvider):
                 "models": [
                     {
                         "name": "jev-latest",
-                        "description": "General-purpose system one model running via Arbiter Trojan Horse Proxy",
+                        "description": "General-purpose system one model running via JEV-Fuse Trojan Horse Proxy",
                         "release_date": "2026-09-15",
                     },
                     {
                         "name": "jev-1.13.0",
-                        "description": "Pinned jev-1.13.0 model running via Arbiter",
+                        "description": "Pinned jev-1.13.0 model running via JEV-Fuse",
                         "release_date": "2026-09-01",
                     },
                 ]

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Claude Code PreToolUse command hook for Arbiter.
+"""Claude Code PreToolUse command hook for JEV-Fuse.
 
 Reads a tool call event on stdin and writes a PreToolUseResult (Claude Code 2.1.274) on stdout:
 - {"allow": true}
@@ -44,7 +44,7 @@ async def run_hook() -> None:
         verdict = await evaluate_shell_command(command, cwd=cwd)
         out = verdict.to_claude_hook_result()
     except Exception as exc:
-        out = {"ask": f"Arbiter: error during safety evaluation ({exc}); asking user confirmation."}
+        out = {"ask": f"JEV-Fuse: error during safety evaluation ({exc}); asking user confirmation."}
 
     # Print single-line valid JSON and exit 0
     sys.stdout.write(json.dumps(out) + "\n")

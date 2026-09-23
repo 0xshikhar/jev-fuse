@@ -33,9 +33,9 @@ class GuardResult:
         if self.action == Action.ALLOW:
             return {"allow": True}
         elif self.action == Action.DENY:
-            return {"deny": f"Arbiter: {self.reason}"}
+            return {"deny": f"JEV-Fuse: {self.reason}"}
         else:
-            return {"ask": f"Arbiter: {self.reason}"}
+            return {"ask": f"JEV-Fuse: {self.reason}"}
 
 
 # ---------------------------------------------------------------------------

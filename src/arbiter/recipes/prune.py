@@ -63,7 +63,7 @@ async def compact_context(
                 head = lines[:truncate_lines]
                 tail = lines[-truncate_lines:]
                 omitted = len(lines) - (truncate_lines * 2)
-                truncated_content = "\n".join(head + [f"\n... [{omitted} lines truncated by Arbiter] ...\n"] + tail)
+                truncated_content = "\n".join(head + [f"\n... [{omitted} lines truncated by JEV-Fuse] ...\n"] + tail)
                 turn_copy = dict(turn)
                 turn_copy["content"] = truncated_content
                 turn_copy["_pruned"] = "truncated"

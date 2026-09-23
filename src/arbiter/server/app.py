@@ -38,8 +38,8 @@ def create_app(engine: ArbiterEngine | None = None) -> FastAPI:
         await app_engine.close()
 
     app = FastAPI(
-        title="Arbiter Decision Gateway",
-        description="Governed decision runtime and policy control plane for AI coding agents.",
+        title="JEV-Fuse Decision Gateway",
+        description="Governed decision runtime, safety gate, and policy control plane for AI coding agents.",
         version="0.1.0",
         lifespan=lifespan,
     )
@@ -62,7 +62,7 @@ def create_app(engine: ArbiterEngine | None = None) -> FastAPI:
     @app.get("/healthz", tags=["System"])
     @app.get("/v1/health", tags=["System"])
     async def health() -> dict[str, str]:
-        return {"status": "ok", "service": "arbiter-gateway"}
+        return {"status": "ok", "service": "fuse-gateway"}
 
     @app.get("/readyz", tags=["System"])
     async def ready() -> dict[str, Any]:
@@ -103,6 +103,7 @@ def create_app(engine: ArbiterEngine | None = None) -> FastAPI:
         try:
             sys_res = await app_engine.systemone(payload, auth_header=auth_header)
             if sys_res.latency_ms is not None:
+                response.headers["X-Fuse-Latency-Ms"] = str(sys_res.latency_ms)
                 response.headers["X-Arbiter-Latency-Ms"] = str(sys_res.latency_ms)
             return sys_res.model_dump(mode="json")
         except HTTPException:
@@ -135,12 +136,12 @@ def create_app(engine: ArbiterEngine | None = None) -> FastAPI:
             "models": [
                 {
                     "name": "jev-latest",
-                    "description": "General-purpose system one model running via Arbiter Trojan Horse Proxy (stub)",
+                    "description": "General-purpose system one model running via JEV-Fuse Trojan Horse Proxy (stub)",
                     "release_date": "2026-09-15",
                 },
                 {
                     "name": "jev-1.13.0",
-                    "description": "Pinned jev-1.13.0 model running via Arbiter (stub)",
+                    "description": "Pinned jev-1.13.0 model running via JEV-Fuse (stub)",
                     "release_date": "2026-09-01",
                 },
             ]
@@ -233,7 +234,7 @@ def create_app(engine: ArbiterEngine | None = None) -> FastAPI:
         html = f"""<!DOCTYPE html>
 <html>
 <head>
-    <title>Arbiter Policy Dashboard</title>
+    <title>JEV-Fuse Policy Dashboard</title>
     <style>
         body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0d1117; color: #c9d1d9; margin: 0; padding: 24px; }}
         h1 {{ color: #58a6ff; margin-bottom: 8px; }}
@@ -252,7 +253,7 @@ def create_app(engine: ArbiterEngine | None = None) -> FastAPI:
     </style>
 </head>
 <body>
-    <h1>Arbiter Control Plane</h1>
+    <h1>JEV-Fuse Control Plane</h1>
     <div class="subtitle">Real-time governed decision metrics and audit stream</div>
     
     <div class="grid">

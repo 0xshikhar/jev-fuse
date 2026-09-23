@@ -15,12 +15,12 @@ from arbiter.schema.decision import Action, DecisionKind, DecisionRequest
 
 
 def create_mcp_server(engine: ArbiterEngine | None = None) -> MCPServer:
-    """Create and configure the Jev Arbiter MCP server."""
+    """Create and configure the JEV-Fuse MCP server."""
     app_engine = engine or ArbiterEngine()
-    server = MCPServer("jev-fuse")
+    server = MCPServer("fuse")
 
     @server.tool()
-    async def arbiter_guard(command: str, cwd: str = "") -> str:
+    async def fuse_guard(command: str, cwd: str = "") -> str:
         """Evaluate whether a terminal/bash command is safe to execute automatically.
         
         Args:
@@ -42,7 +42,7 @@ def create_mcp_server(engine: ArbiterEngine | None = None) -> MCPServer:
         })
 
     @server.tool()
-    async def arbiter_prune(turns: list[dict[str, Any]], goal: str) -> str:
+    async def fuse_prune(turns: list[dict[str, Any]], goal: str) -> str:
         """Prune conversation turns to compact agent context without loss of critical code.
         
         Args:
@@ -85,7 +85,7 @@ def create_mcp_server(engine: ArbiterEngine | None = None) -> MCPServer:
         return json.dumps({"pruned_turns": results})
 
     @server.tool()
-    async def arbiter_verify(statement: str, context: str = "") -> str:
+    async def fuse_verify(statement: str, context: str = "") -> str:
         """Verify whether a semantic statement holds true given context (binary judgment).
         
         Args:
@@ -110,7 +110,7 @@ def create_mcp_server(engine: ArbiterEngine | None = None) -> MCPServer:
         })
 
     @server.tool()
-    async def arbiter_route(query: str, options: list[str]) -> str:
+    async def fuse_route(query: str, options: list[str]) -> str:
         """Route a user prompt or tool query to one of multiple discrete candidates.
         
         Args:
