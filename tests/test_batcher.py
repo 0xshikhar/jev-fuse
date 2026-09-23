@@ -3,13 +3,14 @@
 import asyncio
 import time
 import uuid
-from typing import Sequence
+from collections.abc import Sequence
+
 import pytest
 
-from arbiter.batch.batcher import MicroBatcher
-from arbiter.cache.hasher import compute_input_hash
-from arbiter.provider.base import ProviderHealth
-from arbiter.schema.internal import NormalizedRequest, RawScore
+from jevfuse.batch.batcher import MicroBatcher
+from jevfuse.cache.hasher import compute_input_hash
+from jevfuse.provider.base import ProviderHealth
+from jevfuse.schema.internal import NormalizedRequest, RawScore
 
 
 def make_request(task: str = "test-task", text: str = "test-input", kind: str = "bool") -> NormalizedRequest:

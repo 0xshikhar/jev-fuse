@@ -1,19 +1,21 @@
 """Integration and conformance tests for Arbiter REST Gateway and Native MCP Server."""
 
 import json
-from typing import Any, Sequence
+from collections.abc import Sequence
+from typing import Any
+
 import httpx
 import pytest
 from httpx import ASGITransport
 
-from arbiter.engine import ArbiterEngine
-from arbiter.mcp.server import create_mcp_server
-from arbiter.provider.base import ProviderHealth
-from arbiter.recipes.guard import evaluate_command
-from arbiter.recipes.prune import compact_context
-from arbiter.schema.decision import Action, DecisionKind, DecisionRequest
-from arbiter.schema.internal import NormalizedRequest, RawScore
-from arbiter.server.app import create_app
+from jevfuse.engine import ArbiterEngine
+from jevfuse.mcp.server import create_mcp_server
+from jevfuse.provider.base import ProviderHealth
+from jevfuse.recipes.guard import evaluate_command
+from jevfuse.recipes.prune import compact_context
+from jevfuse.schema.decision import Action
+from jevfuse.schema.internal import NormalizedRequest, RawScore
+from jevfuse.server.app import create_app
 
 
 class MockDeterministicProvider:

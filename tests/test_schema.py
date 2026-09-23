@@ -3,7 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
-from arbiter.schema import (
+from jevfuse.schema import (
     Action,
     ArbiterError,
     CalibratedScore,

@@ -1,16 +1,17 @@
 """Integration tests for JevDriver using httpx MockTransport targeting POST /v1/systemone."""
 
 import json
+
 import httpx
 import pytest
 
-from arbiter.provider import (
+from jevfuse.provider import (
     DecisionProvider,
     JevDriver,
     ProviderAuthenticationError,
     RateLimitExceededError,
 )
-from arbiter.schema import (
+from jevfuse.schema import (
     DecisionKind,
     NormalizedRequest,
     SystemOneRequest,

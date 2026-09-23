@@ -8,7 +8,7 @@ import sys
 def run_hook_subproc(payload: str) -> subprocess.CompletedProcess[str]:
     """Execute arbiter hook pre-tool-use via subprocess."""
     return subprocess.run(
-        [sys.executable, "-m", "arbiter.hook.pre_tool_use"],
+        [sys.executable, "-m", "jevfuse.hook.pre_tool_use"],
         input=payload,
         text=True,
         capture_output=True,

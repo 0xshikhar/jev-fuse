@@ -2,10 +2,11 @@
 
 import asyncio
 from pathlib import Path
+
 import pytest
 
-from arbiter.log import DecisionLogReader, DecisionLogWriter, DecisionRecord
-from arbiter.schema import Action
+from jevfuse.log import DecisionLogReader, DecisionLogWriter, DecisionRecord
+from jevfuse.schema import Action
 
 
 def make_record(

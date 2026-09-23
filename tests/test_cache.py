@@ -2,9 +2,10 @@
 
 import asyncio
 from pathlib import Path
+
 import pytest
 
-from arbiter.cache import (
+from jevfuse.cache import (
     CompositeCache,
     InMemoryLRUCache,
     SQLiteCacheStore,
@@ -12,7 +13,7 @@ from arbiter.cache import (
     compute_input_hash,
     hash_normalized_request,
 )
-from arbiter.schema import DecisionKind, NormalizedRequest, RawScore
+from jevfuse.schema import DecisionKind, NormalizedRequest, RawScore
 
 
 def test_canonicalize_text():

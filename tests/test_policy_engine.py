@@ -1,7 +1,8 @@
 """Unit tests for declarative Policy Engine, YAML loading, and rule evaluation."""
 
 import pytest
-from arbiter.policy import (
+
+from jevfuse.policy import (
     Action,
     PolicyContext,
     PolicyDefinition,

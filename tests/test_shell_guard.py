@@ -2,11 +2,11 @@
 
 import json
 from pathlib import Path
+
 import pytest
 
-from arbiter.guard.classifier import evaluate_shell_command
-from arbiter.schema.decision import Action
-
+from jevfuse.guard.classifier import evaluate_shell_command
+from jevfuse.schema.decision import Action
 
 GOLDEN_PATH = Path(__file__).parent / "fixtures" / "shell_guard_golden.json"
 

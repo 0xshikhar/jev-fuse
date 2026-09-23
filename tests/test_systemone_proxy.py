@@ -8,24 +8,20 @@ governed margin deadbands, and full-fidelity SQLite logging.
 import asyncio
 import json
 from typing import Any
-import httpx
-from httpx import ASGITransport
-import pytest
 
-from arbiter.engine import ArbiterEngine
-from arbiter.provider.base import ProviderHealth
-from arbiter.provider.jev import JevDriver
-from arbiter.schema import (
+import httpx
+import pytest
+from httpx import ASGITransport
+
+from jevfuse.engine import ArbiterEngine
+from jevfuse.provider.jev import JevDriver
+from jevfuse.schema import (
     Action,
     ChoiceAnswer,
-    NoulAnswer,
-    ScoreAnswer,
-    SystemOneRequest,
     SystemOneResponse,
     Usage,
 )
-from arbiter.server.app import create_app
-
+from jevfuse.server.app import create_app
 
 # Recorded TypeSafe fixture responses
 FIXTURE_SYSTEMONE_RESPONSE = {
@@ -440,7 +436,7 @@ async def test_official_typesafe_python_sdk_roundtrip(
     byte-for-byte on the answers object.
     """
     import uvicorn
-    from typesafe_sdk import AsyncTypeSafeClient, Noul, Choice, Score
+    from typesafe_sdk import AsyncTypeSafeClient, Choice, Noul, Score
 
     app = create_app(engine=systemone_engine)
 
@@ -495,7 +491,10 @@ async def test_official_typesafe_python_sdk_roundtrip(
 @pytest.mark.asyncio
 async def test_upstream_error_passthrough_status_codes(systemone_engine: ArbiterEngine) -> None:
     """Verify that Jev upstream errors (401, 429, 529) pass through with exact HTTP status codes."""
-    from arbiter.provider.exceptions import RateLimitExceededError, ProviderUnavailableError
+    from jevfuse.provider.exceptions import (
+        ProviderUnavailableError,
+        RateLimitExceededError,
+    )
     app = create_app(engine=systemone_engine)
 
     # 1. Test 429 passthrough with Retry-After

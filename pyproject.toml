@@ -24,8 +24,8 @@ dependencies = [
 ]
 
 [project.scripts]
-jevfuse = "arbiter.cli.main:main"
-jev-fuse = "arbiter.cli.main:main"
+jevfuse = "jevfuse.cli.main:main"
+jev-fuse = "jevfuse.cli.main:main"
 
 [project.optional-dependencies]
 dev = [
@@ -34,7 +34,7 @@ dev = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/arbiter"]
+packages = ["src/jevfuse"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
