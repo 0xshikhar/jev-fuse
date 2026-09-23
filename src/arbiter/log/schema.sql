@@ -1,4 +1,4 @@
--- Arbiter Decision Log Schema
+-- JEV-Fuse Decision Log Schema
 -- Single source of truth for all machine judgments, calibration, and audit trails.
 
 CREATE TABLE IF NOT EXISTS decisions (
