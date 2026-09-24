@@ -1,4 +1,4 @@
-"""Error schemas and structured error codes for Arbiter."""
+"""Error schemas and structured error codes for JEV Fuse."""
 
 from typing import Literal
 
@@ -19,7 +19,7 @@ ErrorCode = Literal[
 ]
 
 
-class ArbiterError(BaseModel):
+class JevFuseError(BaseModel):
     """Structured error payload returned on 4xx/5xx or MCP tool failures."""
     error_code: ErrorCode = Field(..., description="Machine-readable error identifier")
     message: str = Field(..., description="Human-readable error description")
@@ -28,3 +28,5 @@ class ArbiterError(BaseModel):
         default=Action.ASK,
         description="Safe fallback action for calling agent to take upon encountering this error"
     )
+
+

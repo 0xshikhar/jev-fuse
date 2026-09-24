@@ -35,9 +35,9 @@ htmlcov/
 .mypy_cache/
 .ruff_cache/
 
-# Arbiter runtime local data
-~/.arbiter/
-.arbiter/
+# JEV Fuse runtime local data
+~/.jevfuse/
+.jevfuse/
 *.db
 *.db-wal
 *.db-shm

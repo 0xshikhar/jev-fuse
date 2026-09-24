@@ -1,4 +1,4 @@
-"""CLI package for Arbiter command line interface."""
+"""CLI package for JEV Fuse command line interface."""
 
 from jevfuse.cli.main import main
 

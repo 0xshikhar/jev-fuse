@@ -1,4 +1,4 @@
-"""FastAPI REST Gateway exposing canonical Arbiter endpoints and TypeSafe Jev drop-in API."""
+"""FastAPI REST Gateway exposing canonical JEV Fuse endpoints and TypeSafe Jev drop-in API."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
-from jevfuse.engine import ArbiterEngine
+from jevfuse.engine import JevFuseEngine
 from jevfuse.policy.schema import PolicyDefinition
 from jevfuse.provider.exceptions import ProviderError
 from jevfuse.schema.decision import DecisionRequest, DecisionResponse
@@ -26,10 +26,10 @@ class RegisterPolicyPayload(BaseModel):
     policy: PolicyDefinition
 
 
-def create_app(engine: ArbiterEngine | None = None) -> FastAPI:
-    """Application factory for Arbiter FastAPI Gateway."""
+def create_app(engine: JevFuseEngine | None = None) -> FastAPI:
+    """Application factory for JEV Fuse FastAPI Gateway."""
     
-    app_engine = engine or ArbiterEngine()
+    app_engine = engine or JevFuseEngine()
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
@@ -72,7 +72,7 @@ def create_app(engine: ArbiterEngine | None = None) -> FastAPI:
         return {"ready": True, "provider": p_health.model_dump()}
 
     # -------------------------------------------------------------
-    # 2. Canonical Arbiter Decision Endpoint
+    # 2. Canonical JEV Fuse Decision Endpoint
     # -------------------------------------------------------------
     @app.post("/v1/decide", response_model=DecisionResponse, tags=["Decisions"])
     async def decide(request: DecisionRequest) -> DecisionResponse:
@@ -105,7 +105,7 @@ def create_app(engine: ArbiterEngine | None = None) -> FastAPI:
             sys_res = await app_engine.systemone(payload, auth_header=auth_header)
             if sys_res.latency_ms is not None:
                 response.headers["X-Fuse-Latency-Ms"] = str(sys_res.latency_ms)
-                response.headers["X-Arbiter-Latency-Ms"] = str(sys_res.latency_ms)
+                response.headers["X-JevFuse-Latency-Ms"] = str(sys_res.latency_ms)
             return sys_res.model_dump(mode="json")
         except HTTPException:
             raise
@@ -259,6 +259,7 @@ def create_app(engine: ArbiterEngine | None = None) -> FastAPI:
     
     <div class="grid">
         <div class="card"><div>Total Decisions</div><div class="metric">{total}</div></div>
+        <div class="card"><div>Action Breakdown</div><div class="metric" style="font-size: 16px;">{", ".join(f"{k.upper()}: {v}" for k, v in actions.items()) if actions else "None"}</div></div>
         <div class="card"><div>Active Provider</div><div class="metric" style="font-size: 20px;">{app_engine.provider.name}</div></div>
         <div class="card"><div>Avg Batch Size</div><div class="metric">{app_engine.batcher.stats.avg_batch_size:.1f}</div></div>
         <div class="card"><div>Queue Latency Floor</div><div class="metric">{app_engine.batcher.stats.current_window_ms:.1f}ms</div></div>

@@ -1,4 +1,4 @@
-"""Arbiter Decision Log storage and analytical query engine."""
+"""JEV Fuse Decision Log storage and analytical query engine."""
 
 from jevfuse.log.models import DecisionRecord
 from jevfuse.log.reader import DecisionLogReader

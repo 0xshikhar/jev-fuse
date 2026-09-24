@@ -5,11 +5,11 @@ from pydantic import ValidationError
 
 from jevfuse.schema import (
     Action,
-    ArbiterError,
     CalibratedScore,
     DecisionKind,
     DecisionRequest,
     DecisionResponse,
+    JevFuseError,
     NormalizedRequest,
     RawScore,
 )
@@ -125,7 +125,7 @@ def test_decision_request_json_roundtrip():
         input="git push --force origin main",
         choices=["allow", "deny"],
         client_id="codex",
-        context={"branch": "main", "repo": "arbiter"},
+        context={"branch": "main", "repo": "jev-fuse"},
         idempotency_key="idemp_12345",
     )
     json_data = req.model_dump_json()
@@ -217,11 +217,12 @@ def test_normalized_request_and_scores():
     assert not calibrated.is_abstention
 
 
-def test_arbiter_error_defaults_to_safe_ask():
-    err = ArbiterError(
+def test_jevfuse_error_defaults_to_safe_ask():
+    err = JevFuseError(
         error_code="provider_timeout",
         message="TypeSafe Jev API took longer than 800ms",
         trace_id="tr_timeout_999",
     )
     assert err.error_code == "provider_timeout"
     assert err.suggested_action == Action.ASK  # Safe default to avoid silent auto-allows
+

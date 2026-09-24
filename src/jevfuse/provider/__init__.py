@@ -1,4 +1,4 @@
-"""Arbiter provider layer."""
+"""JEV Fuse provider layer."""
 
 from jevfuse.provider.base import DecisionProvider, ProviderHealth
 from jevfuse.provider.exceptions import (

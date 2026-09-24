@@ -1,4 +1,4 @@
-"""Arbiter CLI: Command line interface for running the server, MCP, and agent recipes."""
+"""JEV Fuse CLI: Command line interface for running the server, MCP, and agent recipes."""
 
 from __future__ import annotations
 

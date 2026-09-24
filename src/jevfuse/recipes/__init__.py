@@ -1,4 +1,4 @@
-"""Showcase recipes and high-leverage agent workflows for Arbiter."""
+"""Showcase recipes and high-leverage agent workflows for JEV Fuse."""
 
 from jevfuse.recipes.guard import GuardVerdict, evaluate_command
 from jevfuse.recipes.prune import compact_context

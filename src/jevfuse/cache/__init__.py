@@ -1,4 +1,4 @@
-"""Arbiter local idempotency and caching layer."""
+"""JEV Fuse local idempotency and caching layer."""
 
 from jevfuse.cache.base import CacheEntry, CacheStore
 from jevfuse.cache.hasher import (

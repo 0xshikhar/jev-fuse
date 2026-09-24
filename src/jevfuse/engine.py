@@ -1,4 +1,4 @@
-"""Arbiter Runtime Engine: Cohesive control plane coordinating cache, batcher, policy, and logging."""
+"""JEV Fuse Runtime Engine: Cohesive control plane coordinating cache, batcher, policy, and logging."""
 
 from __future__ import annotations
 
@@ -41,7 +41,7 @@ def create_default_policy_engine() -> PolicyEngine:
     """Initialize a PolicyEngine with default security and agent governance policies."""
     engine = PolicyEngine(default_unrouted_action=Action.ASK)
 
-    # 1. Shell Safety Guard Policy (arbiter-guard)
+    # 1. Shell Safety Guard Policy (fuse-guard)
     # Binary task: is_destructive. If confident that destructive -> DENY. If confident safe -> ALLOW. Otherwise ASK.
     guard_policy = PolicyDefinition(
         task="shell-guard",
@@ -64,7 +64,7 @@ def create_default_policy_engine() -> PolicyEngine:
     )
     engine.register_policy(guard_policy)
 
-    # 2. Context Pruning Policy (arbiter-prune)
+    # 2. Context Pruning Policy (fuse-prune)
     # Score task: relevance (0.0 to 1.0). High relevance -> KEEP, mid -> TRUNCATE, low -> DROP.
     prune_policy = PolicyDefinition(
         task="context-prune",
@@ -90,8 +90,8 @@ def create_default_policy_engine() -> PolicyEngine:
     return engine
 
 
-class ArbiterEngine:
-    """The central unified runtime engine for Arbiter."""
+class JevFuseEngine:
+    """The central unified governance and decision runtime engine for JEV Fuse."""
 
     def __init__(
         self,
@@ -99,8 +99,8 @@ class ArbiterEngine:
         cache: CompositeCache | None = None,
         policy_engine: PolicyEngine | None = None,
         log_writer: DecisionLogWriter | None = None,
-        db_path: str = "arbiter_decisions.db",
-        cache_db_path: str = "arbiter_cache.db",
+        db_path: str = "jevfuse_decisions.db",
+        cache_db_path: str = "jevfuse_cache.db",
     ) -> None:
         # 1. Decision Provider (Defaults to JevDriver or fallback)
         if provider is None:
@@ -541,3 +541,5 @@ class ArbiterEngine:
     async def record_feedback(self, trace_id: str, label: str) -> bool:
         """Record ground truth human label for active learning and calibration."""
         return await self.log_writer.attach_label(trace_id, label)
+
+

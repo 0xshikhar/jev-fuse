@@ -1,7 +1,7 @@
 """TypeSafe Jev System One Wire Standard Schemas.
 
 Faithful models adhering to TypeSafe's OpenAPI spec (POST /v1/systemone)
-with seamless support for Arbiter's governed overlay actions.
+with seamless support for JEV Fuse's governed overlay actions.
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ class ChoiceAnswer(BaseModel):
         ...,
         description="Probability of each choice in criteria, keyed by choice name, from 0 to 1.",
     )
-    # Arbiter Governed Overlay extensions (optional, ignored by standard SDKs)
+    # JEV Fuse Governed Overlay extensions (optional, ignored by standard SDKs)
     action: Action | None = Field(default=None, description="Governed policy action if evaluated.")
     margin: float | None = Field(default=None, description="Margin between top and runner-up probability.")
     reason: str | None = Field(default=None, description="Explanation for policy action.")
@@ -47,7 +47,7 @@ class NoulAnswer(BaseModel):
         ...,
         description="Probability of a yes answer or true statement, from 0 to 1.",
     )
-    # Arbiter Governed Overlay extensions
+    # JEV Fuse Governed Overlay extensions
     confidence: float | None = Field(default=None, description="Distance from uncertainty 0.5.")
     action: Action | None = Field(default=None, description="Governed policy action if evaluated.")
     reason: str | None = Field(default=None, description="Explanation for policy action.")
@@ -75,7 +75,7 @@ class ScoreAnswer(BaseModel):
         ...,
         description="Probability of each score level, keyed by level string.",
     )
-    # Arbiter Governed Overlay extensions
+    # JEV Fuse Governed Overlay extensions
     action: Action | None = Field(default=None, description="Governed policy action if evaluated.")
     reason: str | None = Field(default=None, description="Explanation for policy action.")
 
@@ -143,8 +143,8 @@ class SystemOneResponse(BaseModel):
     model: str = Field(..., description="Model that evaluated the request.")
     answers: dict[str, Any] = Field(..., description="Map of answers keyed by question name.")
     usage: Usage = Field(default_factory=Usage, description="Token usage accounting.")
-    # Optional metadata populated by Arbiter proxy
-    governed: dict[str, Any] | None = Field(default=None, description="Arbiter policy verdicts if governed.")
+    # Optional metadata populated by JEV Fuse proxy
+    governed: dict[str, Any] | None = Field(default=None, description="JEV Fuse policy verdicts if governed.")
     latency_ms: float | None = Field(default=None, description="Total execution latency in milliseconds.")
 
     def __getitem__(self, item: str) -> Any:

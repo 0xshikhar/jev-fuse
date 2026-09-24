@@ -1,7 +1,7 @@
 """Provider-specific exceptions and error conversions."""
 
 from jevfuse.schema.decision import Action
-from jevfuse.schema.errors import ArbiterError, ErrorCode
+from jevfuse.schema.errors import ErrorCode, JevFuseError
 
 
 class ProviderError(Exception):
@@ -26,8 +26,8 @@ class ProviderError(Exception):
         self.raw_body = raw_body
         self.headers = headers or {}
 
-    def to_arbiter_error(self) -> ArbiterError:
-        return ArbiterError(
+    def to_jevfuse_error(self) -> JevFuseError:
+        return JevFuseError(
             error_code=self.error_code,
             message=self.message,
             trace_id=self.trace_id,

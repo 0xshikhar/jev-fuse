@@ -12,6 +12,26 @@ license = { text = "Apache-2.0" }
 authors = [
     { name = "JEV-Fuse Contributors" }
 ]
+keywords = [
+    "typesafe",
+    "jev",
+    "decision-models",
+    "system-one",
+    "claude-code",
+    "mcp",
+    "governance",
+    "security-guardrails",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Security",
+]
 dependencies = [
     "fastapi>=0.115.0",
     "uvicorn>=0.30.0",
@@ -22,6 +42,12 @@ dependencies = [
     "duckdb>=1.0.0",
     "pyyaml>=6.0.1",
 ]
+
+[project.urls]
+Homepage = "https://github.com/0xshikhar/jev-fuse"
+Repository = "https://github.com/0xshikhar/jev-fuse"
+Issues = "https://github.com/0xshikhar/jev-fuse/issues"
+Documentation = "https://github.com/0xshikhar/jev-fuse#readme"
 
 [project.scripts]
 jevfuse = "jevfuse.cli.main:main"

@@ -1,4 +1,4 @@
-"""Base protocol and health structures for Arbiter decision providers."""
+"""Base protocol and health structures for JEV Fuse decision providers."""
 
 from collections.abc import Sequence
 from typing import Any, Literal, Protocol, runtime_checkable

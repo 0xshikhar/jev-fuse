@@ -1,4 +1,4 @@
-"""Arbiter declarative policy engine and YAML loader."""
+"""JEV Fuse declarative policy engine and YAML loader."""
 
 from jevfuse.policy.engine import PolicyEngine, PolicyHook
 from jevfuse.policy.linter import (

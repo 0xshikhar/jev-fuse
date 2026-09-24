@@ -1,4 +1,4 @@
-"""Unit & golden contract tests for Arbiter Shell Guard (Phase 8)."""
+"""Unit & golden contract tests for JEV Fuse Shell Guard (Phase 8)."""
 
 import json
 from pathlib import Path

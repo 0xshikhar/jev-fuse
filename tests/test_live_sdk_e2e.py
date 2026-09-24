@@ -26,10 +26,9 @@ import pytest
 import uvicorn
 from typesafe_sdk import AsyncTypeSafeClient, Choice, Noul, Score
 
-from jevfuse.engine import ArbiterEngine
+from jevfuse.engine import JevFuseEngine
 from jevfuse.mcp.server import create_mcp_server
-from jevfuse.recipes.prune import compact_context
-from jevfuse.schema.decision import Action, DecisionKind, DecisionRequest
+from jevfuse.schema.decision import DecisionKind
 from jevfuse.schema.internal import NormalizedRequest, RawScore
 from jevfuse.server.app import create_app
 
@@ -69,7 +68,7 @@ async def live_fuse_server(tmp_path: Any):
     """Spin up a live JEV-Fuse gateway on a dedicated loopback port."""
     db_file = str(tmp_path / "live_decisions.db")
     cache_file = str(tmp_path / "live_cache.db")
-    engine = ArbiterEngine(
+    engine = JevFuseEngine(
         provider=MockSystemOneProvider(),
         db_path=db_file,
         cache_db_path=cache_file,

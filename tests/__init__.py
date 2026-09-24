@@ -1,1 +1,1 @@
-"""Unit tests for Arbiter test suite."""
+"""Unit tests for JEV Fuse test suite."""

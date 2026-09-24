@@ -1,7 +1,7 @@
-"""Native Model Context Protocol (MCP) server for Arbiter.
+"""Native Model Context Protocol (MCP) server for JEV Fuse.
 
 Enables Claude Code, Cursor, Codex, and other MCP-enabled agents to invoke
-Arbiter's policy gates, bash command auto-approval, and context compaction natively.
+JEV Fuse's policy gates, bash command auto-approval, and context compaction natively.
 """
 
 from __future__ import annotations
@@ -11,13 +11,13 @@ from typing import Any
 
 from mcp.server.mcpserver import MCPServer
 
-from jevfuse.engine import ArbiterEngine
+from jevfuse.engine import JevFuseEngine
 from jevfuse.schema.decision import Action, DecisionKind, DecisionRequest
 
 
-def create_mcp_server(engine: ArbiterEngine | None = None) -> MCPServer:
-    """Create and configure the JEV-Fuse MCP server."""
-    app_engine = engine or ArbiterEngine()
+def create_mcp_server(engine: JevFuseEngine | None = None) -> MCPServer:
+    """Create and configure the JEV Fuse MCP server."""
+    app_engine = engine or JevFuseEngine()
     server = MCPServer("fuse")
 
     @server.tool()

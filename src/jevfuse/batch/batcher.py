@@ -1,4 +1,4 @@
-"""Adaptive cross-request micro-batcher for Arbiter decision providers.
+"""Adaptive cross-request micro-batcher for JEV Fuse decision providers.
 
 Coalesces individual concurrent decision requests into optimal batches for
 the underlying inference engine (hosted HTTP/2 or local matrix multiplication),
@@ -83,7 +83,7 @@ class MicroBatcher:
         self._running = True
         self._worker_task = asyncio.create_task(
             self._worker_loop(),
-            name=f"arbiter-batcher-{self.provider.name}",
+            name=f"jevfuse-batcher-{self.provider.name}",
         )
 
     async def enqueue(self, request: NormalizedRequest) -> RawScore:

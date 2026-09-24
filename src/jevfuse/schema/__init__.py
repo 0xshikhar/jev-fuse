@@ -1,4 +1,4 @@
-"""Arbiter canonical schema definitions."""
+"""JEV Fuse canonical schema definitions."""
 
 from jevfuse.schema.decision import (
     Action,
@@ -7,8 +7,8 @@ from jevfuse.schema.decision import (
     DecisionResponse,
 )
 from jevfuse.schema.errors import (
-    ArbiterError,
     ErrorCode,
+    JevFuseError,
 )
 from jevfuse.schema.internal import (
     CalibratedScore,
@@ -35,7 +35,6 @@ from jevfuse.schema.systemone import (
 __all__ = [
     "Action",
     "Answer",
-    "ArbiterError",
     "CalibratedScore",
     "ChoiceAnswer",
     "ChoiceQuestion",
@@ -43,6 +42,7 @@ __all__ = [
     "DecisionRequest",
     "DecisionResponse",
     "ErrorCode",
+    "JevFuseError",
     "ModelMetadata",
     "ModelMetadataList",
     "NormalizedRequest",

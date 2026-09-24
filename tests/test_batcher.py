@@ -1,4 +1,4 @@
-"""Unit and concurrency tests for Arbiter MicroBatcher."""
+"""Unit and concurrency tests for JEV Fuse MicroBatcher."""
 
 import asyncio
 import time

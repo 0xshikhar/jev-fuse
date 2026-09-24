@@ -1,4 +1,4 @@
-"""Arbiter Prune Recipe: High-speed context window compaction for AI coding sessions.
+"""JEV Fuse Prune Recipe: High-speed context window compaction for AI coding sessions.
 
 Prunes stale tool outputs and dead log dumps from conversation histories in <100ms,
 keeping vital code context verbatim without lossy narrative summarization.
@@ -9,14 +9,14 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Any
 
-from jevfuse.engine import ArbiterEngine
+from jevfuse.engine import JevFuseEngine
 from jevfuse.schema.decision import Action, DecisionKind, DecisionRequest
 
 
 async def compact_context(
     turns: Sequence[dict[str, Any]],
     goal: str,
-    engine: ArbiterEngine | None = None,
+    engine: JevFuseEngine | None = None,
     truncate_lines: int = 15,
 ) -> list[dict[str, Any]]:
     """Prune conversation turns to preserve token space while maintaining code fidelity.
@@ -24,13 +24,13 @@ async def compact_context(
     Args:
         turns: List of turn dicts with keys 'role' and 'content'.
         goal: The active user goal or bug description.
-        engine: Optional pre-configured ArbiterEngine.
+        engine: Optional pre-configured JevFuseEngine.
         truncate_lines: Number of head and tail lines to keep when truncating.
         
     Returns:
         Compacted list of turns with stale items dropped or truncated.
     """
-    app_engine = engine or ArbiterEngine()
+    app_engine = engine or JevFuseEngine()
     compacted: list[dict[str, Any]] = []
 
     for idx, turn in enumerate(turns):

@@ -452,8 +452,15 @@ async def evaluate_shell_command(
     # -----------------------------------------------------------------------
 
     # Fast 2-second timeout client
-    arbiter_url = os.environ.get("ARBITER_URL", "http://127.0.0.1:8000").rstrip("/")
-    api_key = os.environ.get("TYPESAFE_API_KEY") or os.environ.get("ARBITER_API_KEY")
+    fuse_url = (
+        os.environ.get("JEVFUSE_URL")
+        or os.environ.get("FUSE_URL", "http://127.0.0.1:8000")
+    ).rstrip("/")
+    api_key = (
+        os.environ.get("TYPESAFE_API_KEY")
+        or os.environ.get("JEVFUSE_API_KEY")
+        or os.environ.get("FUSE_API_KEY")
+    )
 
     try:
         import httpx
@@ -467,12 +474,12 @@ async def evaluate_shell_command(
             headers["Authorization"] = f"Bearer {api_key}"
 
         async with httpx.AsyncClient(timeout=2.0) as client:
-            resp = await client.post(f"{arbiter_url}/v1/systemone", json=payload, headers=headers)
+            resp = await client.post(f"{fuse_url}/v1/systemone", json=payload, headers=headers)
             if resp.status_code != 200:
                 return GuardResult(
                     action=Action.ASK,
                     confidence=0.5,
-                    reason=f"Arbiter upstream returned HTTP {resp.status_code}; asking confirmation.",
+                    reason=f"JEV Fuse upstream returned HTTP {resp.status_code}; asking confirmation.",
                     command=cleaned,
                 )
             data = resp.json()
@@ -523,6 +530,6 @@ async def evaluate_shell_command(
         return GuardResult(
             action=Action.ASK,
             confidence=0.5,
-            reason=f"Arbiter guard unreachable or timed out ({type(exc).__name__}); asking user confirmation.",
+            reason=f"JEV Fuse guard unreachable or timed out ({type(exc).__name__}); asking user confirmation.",
             command=cleaned,
         )

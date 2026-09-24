@@ -13,7 +13,7 @@ import httpx
 import pytest
 from httpx import ASGITransport
 
-from jevfuse.engine import ArbiterEngine
+from jevfuse.engine import JevFuseEngine
 from jevfuse.provider.jev import JevDriver
 from jevfuse.schema import (
     Action,
@@ -136,14 +136,14 @@ def mock_typesafe_transport() -> httpx.MockTransport:
 
 
 @pytest.fixture
-async def systemone_engine(tmp_path: Any, mock_typesafe_transport: httpx.MockTransport) -> ArbiterEngine:
+async def systemone_engine(tmp_path: Any, mock_typesafe_transport: httpx.MockTransport) -> JevFuseEngine:
     db_file = str(tmp_path / "sysone_decisions.db")
     cache_file = str(tmp_path / "sysone_cache.db")
 
     client = httpx.AsyncClient(transport=mock_typesafe_transport, base_url="https://api.typesafe.ai")
     driver = JevDriver(api_key="sk-test-key", http_client=client)
 
-    engine = ArbiterEngine(
+    engine = JevFuseEngine(
         provider=driver,
         db_path=db_file,
         cache_db_path=cache_file,
@@ -156,7 +156,7 @@ async def systemone_engine(tmp_path: Any, mock_typesafe_transport: httpx.MockTra
 
 @pytest.mark.asyncio
 async def test_systemone_wire_conformance_and_proxy(
-    systemone_engine: ArbiterEngine,
+    systemone_engine: JevFuseEngine,
     mock_typesafe_transport: httpx.MockTransport,
 ) -> None:
     """Verify official POST /v1/systemone contract matching TypeSafe answers byte-for-byte."""
@@ -185,7 +185,7 @@ async def test_systemone_wire_conformance_and_proxy(
             },
         }
 
-        # 1. Forward request through Arbiter proxy with custom auth header
+        # 1. Forward request through JEV Fuse proxy with custom auth header
         resp = await client.post(
             "/v1/systemone",
             json=req_payload,
@@ -214,12 +214,13 @@ async def test_systemone_wire_conformance_and_proxy(
         assert answers["quality_score"]["confidence"] == 0.92
 
         # 3. Check response latency header populated
-        assert "X-Arbiter-Latency-Ms" in resp.headers
+        assert "X-JevFuse-Latency-Ms" in resp.headers
+        assert "X-Fuse-Latency-Ms" in resp.headers
 
 
 @pytest.mark.asyncio
 async def test_trojan_horse_fast_jev_compaction_integration(
-    systemone_engine: ArbiterEngine,
+    systemone_engine: JevFuseEngine,
 ) -> None:
     """
     Verify real-world fast-jev-compaction payload works with zero code changes.
@@ -233,7 +234,7 @@ async def test_trojan_horse_fast_jev_compaction_integration(
         compaction_payload = {
             "model": "jev-latest",
             "state": {
-                "context": "Working on arbiter proxy mode implementation.",
+                "context": "Working on JEV Fuse proxy mode implementation.",
                 "goal": "Implement universal systemone wire standard",
                 "history": [
                     {
@@ -281,10 +282,10 @@ async def test_trojan_horse_fast_jev_compaction_integration(
 
 @pytest.mark.asyncio
 async def test_governed_margin_overlay_and_abstention(
-    systemone_engine: ArbiterEngine,
+    systemone_engine: JevFuseEngine,
 ) -> None:
     """
-    Verify Arbiter's core moat: deadband margin abstention overlay.
+    Verify JEV Fuse's core moat: deadband margin abstention overlay.
     - Choice margin p(top) - p(second) < 0.15 -> action: ask
     - Noul probability abs(noul - 0.5) < 0.10 -> action: ask
     """
@@ -338,7 +339,7 @@ async def test_governed_margin_overlay_and_abstention(
 
 @pytest.mark.asyncio
 async def test_singleflight_concurrency_coalescing(
-    systemone_engine: ArbiterEngine,
+    systemone_engine: JevFuseEngine,
     mock_typesafe_transport: httpx.MockTransport,
 ) -> None:
     """Verify singleflight deduplicates 10 concurrent requests into 1 upstream call."""
@@ -373,7 +374,7 @@ async def test_singleflight_concurrency_coalescing(
 
 @pytest.mark.asyncio
 async def test_sqlite_decision_log_full_fidelity(
-    systemone_engine: ArbiterEngine,
+    systemone_engine: JevFuseEngine,
 ) -> None:
     """Verify full-fidelity SQLite decision logging preserving questions, answers, and tokens."""
     app = create_app(engine=systemone_engine)
@@ -409,7 +410,7 @@ async def test_sqlite_decision_log_full_fidelity(
 
 @pytest.mark.asyncio
 async def test_typesafe_models_endpoint(
-    systemone_engine: ArbiterEngine,
+    systemone_engine: JevFuseEngine,
 ) -> None:
     """Verify GET /v1/models and GET /models compatibility."""
     app = create_app(engine=systemone_engine)
@@ -427,12 +428,12 @@ async def test_typesafe_models_endpoint(
 
 @pytest.mark.asyncio
 async def test_official_typesafe_python_sdk_roundtrip(
-    systemone_engine: ArbiterEngine,
+    systemone_engine: JevFuseEngine,
 ) -> None:
     """
     Principal Review milestone:
     Done when: the official Python SDK, configured only with base_url and an API key,
-    runs a three-question request through Arbiter and the answers match a direct call,
+    runs a three-question request through JEV Fuse and the answers match a direct call,
     byte-for-byte on the answers object.
     """
     import uvicorn
@@ -447,7 +448,7 @@ async def test_official_typesafe_python_sdk_roundtrip(
     await asyncio.sleep(0.3)
 
     try:
-        # Configure official TypeSafe Python SDK with Arbiter base_url
+        # Configure official TypeSafe Python SDK with JEV Fuse base_url
         client = AsyncTypeSafeClient(
             base_url="http://127.0.0.1:8765",
             api_key="sk-test-caller-key",
@@ -489,7 +490,7 @@ async def test_official_typesafe_python_sdk_roundtrip(
 
 
 @pytest.mark.asyncio
-async def test_upstream_error_passthrough_status_codes(systemone_engine: ArbiterEngine) -> None:
+async def test_upstream_error_passthrough_status_codes(systemone_engine: JevFuseEngine) -> None:
     """Verify that Jev upstream errors (401, 429, 529) pass through with exact HTTP status codes."""
     from jevfuse.provider.exceptions import (
         ProviderUnavailableError,
@@ -523,7 +524,7 @@ async def test_upstream_error_passthrough_status_codes(systemone_engine: Arbiter
 
 @pytest.mark.asyncio
 async def test_cache_hit_preserves_governed_overlay_action(
-    systemone_engine: ArbiterEngine,
+    systemone_engine: JevFuseEngine,
 ) -> None:
     """Verify that cache hits preserve stored overlay action (e.g. ASK) in the audit log."""
     db_path = systemone_engine.log_writer._db_path

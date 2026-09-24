@@ -1,4 +1,4 @@
-"""Integration and conformance tests for Arbiter REST Gateway and Native MCP Server."""
+"""Integration and conformance tests for JEV Fuse REST Gateway and Native MCP Server."""
 
 import json
 from collections.abc import Sequence
@@ -8,7 +8,7 @@ import httpx
 import pytest
 from httpx import ASGITransport
 
-from jevfuse.engine import ArbiterEngine
+from jevfuse.engine import JevFuseEngine
 from jevfuse.mcp.server import create_mcp_server
 from jevfuse.provider.base import ProviderHealth
 from jevfuse.recipes.guard import evaluate_command
@@ -49,10 +49,10 @@ class MockDeterministicProvider:
 
 
 @pytest.fixture
-async def test_engine(tmp_path: Any) -> ArbiterEngine:
+async def test_engine(tmp_path: Any) -> JevFuseEngine:
     db_file = str(tmp_path / "test_decisions.db")
     cache_file = str(tmp_path / "test_cache.db")
-    engine = ArbiterEngine(
+    engine = JevFuseEngine(
         provider=MockDeterministicProvider(),
         db_path=db_file,
         cache_db_path=cache_file,
@@ -63,7 +63,7 @@ async def test_engine(tmp_path: Any) -> ArbiterEngine:
 
 
 @pytest.mark.asyncio
-async def test_rest_decide_endpoint(test_engine: ArbiterEngine) -> None:
+async def test_rest_decide_endpoint(test_engine: JevFuseEngine) -> None:
     app = create_app(engine=test_engine)
     transport = ASGITransport(app=app)
 
@@ -100,7 +100,7 @@ async def test_rest_decide_endpoint(test_engine: ArbiterEngine) -> None:
 
 
 @pytest.mark.asyncio
-async def test_rest_systemone_typesafe_dropin(test_engine: ArbiterEngine) -> None:
+async def test_rest_systemone_typesafe_dropin(test_engine: JevFuseEngine) -> None:
     """Verify 100% TypeSafe Jev API drop-in compatibility."""
     app = create_app(engine=test_engine)
     transport = ASGITransport(app=app)
@@ -151,7 +151,7 @@ async def test_rest_systemone_typesafe_dropin(test_engine: ArbiterEngine) -> Non
 
 
 @pytest.mark.asyncio
-async def test_rest_feedback_and_metrics_dashboard(test_engine: ArbiterEngine) -> None:
+async def test_rest_feedback_and_metrics_dashboard(test_engine: JevFuseEngine) -> None:
     app = create_app(engine=test_engine)
     transport = ASGITransport(app=app)
 
@@ -183,7 +183,7 @@ async def test_rest_feedback_and_metrics_dashboard(test_engine: ArbiterEngine) -
 
 
 @pytest.mark.asyncio
-async def test_native_mcp_tools(test_engine: ArbiterEngine) -> None:
+async def test_native_mcp_tools(test_engine: JevFuseEngine) -> None:
     """Verify native Model Context Protocol tools."""
     server = create_mcp_server(engine=test_engine)
     tools = await server.list_tools()
@@ -203,7 +203,7 @@ async def test_native_mcp_tools(test_engine: ArbiterEngine) -> None:
 
 
 @pytest.mark.asyncio
-async def test_showcase_recipes(test_engine: ArbiterEngine) -> None:
+async def test_showcase_recipes(test_engine: JevFuseEngine) -> None:
     # 1. Test Guard Recipe
     verdict_safe = await evaluate_command("git status", engine=test_engine)
     assert verdict_safe.action == Action.ALLOW

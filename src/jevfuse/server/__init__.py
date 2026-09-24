@@ -1,4 +1,4 @@
-"""Server package for Arbiter HTTP and MCP gateways."""
+"""Server package for JEV Fuse HTTP and MCP gateways."""
 
 from jevfuse.server.app import create_app
 

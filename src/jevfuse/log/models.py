@@ -11,7 +11,7 @@ from jevfuse.schema.decision import Action
 
 
 class DecisionRecord(BaseModel):
-    """Complete record of a decision evaluated by Arbiter."""
+    """Complete record of a decision evaluated by JEV Fuse."""
     trace_id: str = Field(..., description="Unique decision trace ID")
     timestamp_ns: int = Field(default_factory=time.time_ns, description="Timestamp in nanoseconds")
     timestamp_iso: str = Field(
