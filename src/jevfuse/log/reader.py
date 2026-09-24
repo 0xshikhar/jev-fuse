@@ -27,13 +27,15 @@ class DecisionLogReader:
 
     def get_record(self, trace_id: str) -> DecisionRecord | None:
         """Fetch a single decision record by trace ID."""
-        conn = self._get_conn()
-        res = conn.execute("SELECT * FROM db.decisions WHERE trace_id = ?", [trace_id]).fetchall()
-        if not res:
-            return None
-        col_names = [desc[0] for desc in conn.description]
-        row_dict = dict(zip(col_names, res[0]))
-        return DecisionRecord.from_row(row_dict)
+        import sqlite3
+        with sqlite3.connect(self._db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM decisions WHERE trace_id = ?", (trace_id,))
+            row = cursor.fetchone()
+            if not row:
+                return None
+            return DecisionRecord.from_row(dict(row))
 
     def query_records(
         self,

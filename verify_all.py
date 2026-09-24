@@ -27,26 +27,45 @@ async def main():
     print("\n[2/4] Testing REST API & Vercel AI Gateway Proxy...")
     app = create_app()
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
-        # Health & Ready
-        r = await client.get("/readyz")
-        assert r.status_code == 200
-        print("  ✅ GET /readyz -> Healthy (Upstream connected)")
+        # Health
+        h = await client.get("/healthz")
+        assert h.status_code == 200, f"Expected 200 on /healthz, got {h.status_code}"
+        print("  ✅ GET /healthz -> Healthy (Local runtime active)")
 
-        # SystemOne Proxy
-        payload = {
-            "model": "typesafe-ai/jev",
-            "state": "User requested deleting test database records.",
-            "questions": {"safe": {"type": "noul", "instructions": "Is this safe to run automated?"}}
-        }
-        res1 = await client.post("/v1/systemone", json=payload)
-        assert res1.status_code == 200
-        print("  ✅ POST /v1/systemone -> Live Vercel AI Gateway evaluated")
+        # Canonical governed decision endpoint
+        d_res = await client.post("/v1/decide", json={"task": "shell-guard", "kind": "bool", "input": "git status"})
+        assert d_res.status_code == 200
+        print(f"  ✅ POST /v1/decide -> Governed Policy Active (Action: {d_res.json().get('action')})")
 
-        # Cache Hit Test
-        res2 = await client.post("/v1/systemone", json=payload)
-        lat = float(res2.headers.get("X-Fuse-Latency-Ms", "0"))
-        assert res2.status_code == 200
-        print(f"  ✅ POST /v1/systemone -> Instant Cache Hit ({lat:.3f} ms)")
+        has_key = bool(
+            os.environ.get("AI_GATEWAY_API_KEY")
+            or os.environ.get("TYPESAFE_API_KEY")
+            or os.environ.get("JEV_API_KEY")
+        )
+        if has_key:
+            r = await client.get("/readyz")
+            assert r.status_code == 200, f"Expected 200 on /readyz, got {r.status_code}: {r.text}"
+            print("  ✅ GET /readyz -> Healthy (Upstream connected)")
+
+            # SystemOne Proxy
+            payload = {
+                "model": "typesafe-ai/jev",
+                "state": "User requested deleting test database records.",
+                "questions": {"safe": {"type": "noul", "instructions": "Is this safe to run automated?"}}
+            }
+            res1 = await client.post("/v1/systemone", json=payload)
+            assert res1.status_code == 200
+            print("  ✅ POST /v1/systemone -> Live Vercel AI Gateway evaluated")
+
+            # Cache Hit Test
+            res2 = await client.post("/v1/systemone", json=payload)
+            lat = float(res2.headers.get("X-Fuse-Latency-Ms", "0"))
+            assert res2.status_code == 200
+            print(f"  ✅ POST /v1/systemone -> Instant Cache Hit ({lat:.3f} ms)")
+        else:
+            print("  ℹ️  Notice: AI_GATEWAY_API_KEY is not exported in this shell session.")
+            print("     (To test live upstream Vercel AI Gateway calls, run with:")
+            print("      export AI_GATEWAY_API_KEY=\"vck_...\" && uv run python verify_all.py)")
 
     # 3. Test MCP Server Tools
     print("\n[3/4] Testing Model Context Protocol (MCP) Server...")
