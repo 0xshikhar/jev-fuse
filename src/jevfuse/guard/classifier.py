@@ -473,16 +473,30 @@ async def evaluate_shell_command(
         if api_key:
             headers["Authorization"] = f"Bearer {api_key}"
 
-        async with httpx.AsyncClient(timeout=2.0) as client:
-            resp = await client.post(f"{fuse_url}/v1/systemone", json=payload, headers=headers)
-            if resp.status_code != 200:
-                return GuardResult(
-                    action=Action.ASK,
-                    confidence=0.5,
-                    reason=f"JEV Fuse upstream returned HTTP {resp.status_code}; asking confirmation.",
-                    command=cleaned,
-                )
-            data = resp.json()
+        if engine is not None:
+            resp_obj = await engine.systemone(payload)
+            data = resp_obj.model_dump(mode="json")
+        else:
+            try:
+                async with httpx.AsyncClient(timeout=2.0) as client:
+                    resp = await client.post(f"{fuse_url}/v1/systemone", json=payload, headers=headers)
+                    if resp.status_code != 200:
+                        return GuardResult(
+                            action=Action.ASK,
+                            confidence=0.5,
+                            reason=f"JEV Fuse upstream returned HTTP {resp.status_code}; asking confirmation.",
+                            command=cleaned,
+                        )
+                    data = resp.json()
+            except httpx.ConnectError:
+                from jevfuse.engine import JevFuseEngine
+                local_engine = JevFuseEngine()
+                await local_engine.start()
+                try:
+                    resp_obj = await local_engine.systemone(payload)
+                    data = resp_obj.model_dump(mode="json")
+                finally:
+                    await local_engine.close()
 
         answers = data.get("answers", {})
         # Evaluate 4 split nouls

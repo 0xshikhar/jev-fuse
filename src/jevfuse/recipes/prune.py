@@ -30,6 +30,7 @@ async def compact_context(
     Returns:
         Compacted list of turns with stale items dropped or truncated.
     """
+    owns_engine = engine is None
     app_engine = engine or JevFuseEngine()
     compacted: list[dict[str, Any]] = []
 
@@ -76,5 +77,8 @@ async def compact_context(
             continue
         else:
             compacted.append(dict(turn))
+
+    if owns_engine:
+        await app_engine.close()
 
     return compacted

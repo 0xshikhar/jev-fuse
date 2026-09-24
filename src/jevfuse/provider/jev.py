@@ -26,6 +26,7 @@ from jevfuse.schema.systemone import (
 )
 
 DEFAULT_TYPESAFE_BASE_URL = "https://api.typesafe.ai"
+DEFAULT_VERCEL_GATEWAY_URL = "https://ai-gateway.vercel.sh/typesafe"
 DEFAULT_TIMEOUT_MS = 10000.0  # 10s matching official SDK
 DEFAULT_MAX_RETRIES = 3
 
@@ -41,22 +42,29 @@ class JevDriver(DecisionProvider):
         max_retries: int = DEFAULT_MAX_RETRIES,
         http_client: httpx.AsyncClient | None = None,
     ):
+        ai_gateway_key = os.environ.get("AI_GATEWAY_API_KEY") or os.environ.get("VERCEL_AI_GATEWAY_API_KEY")
         resolved_key = (
             api_key
             or os.environ.get("TYPESAFE_API_KEY")
             or os.environ.get("JEV_API_KEY")
+            or ai_gateway_key
         )
         if not resolved_key:
             raise ProviderAuthenticationError(
-                "TYPESAFE_API_KEY (or JEV_API_KEY) is not set. Please export TYPESAFE_API_KEY or provide api_key."
+                "TYPESAFE_API_KEY (or AI_GATEWAY_API_KEY) is not set. Please export TYPESAFE_API_KEY or provide api_key."
             )
 
         self._api_key = resolved_key
+        default_base = (
+            DEFAULT_VERCEL_GATEWAY_URL
+            if (ai_gateway_key and not os.environ.get("TYPESAFE_API_KEY") and not os.environ.get("JEV_API_KEY"))
+            else DEFAULT_TYPESAFE_BASE_URL
+        )
         raw_base = (
             base_url
             or os.environ.get("TYPESAFE_BASE_URL")
             or os.environ.get("JEV_BASE_URL")
-            or DEFAULT_TYPESAFE_BASE_URL
+            or default_base
         ).rstrip("/")
         # If user passed url with /v1 at the end, strip it so base client targets root
         raw_base = raw_base.removesuffix("/v1")

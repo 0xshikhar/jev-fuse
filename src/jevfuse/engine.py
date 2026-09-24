@@ -24,6 +24,7 @@ from jevfuse.policy.schema import (
     RuleCondition,
 )
 from jevfuse.provider.base import DecisionProvider
+from jevfuse.provider.exceptions import ProviderAuthenticationError
 from jevfuse.provider.jev import JevDriver
 from jevfuse.schema.decision import (
     Action,
@@ -104,8 +105,10 @@ class JevFuseEngine:
     ) -> None:
         # 1. Decision Provider (Defaults to JevDriver or fallback)
         if provider is None:
-            api_key = os.environ.get("TYPESAFE_API_KEY") or os.environ.get("JEV_API_KEY", "mock-key")
-            self.provider = JevDriver(api_key=api_key)
+            try:
+                self.provider = JevDriver()
+            except ProviderAuthenticationError:
+                self.provider = JevDriver(api_key="mock-key")
         else:
             self.provider = provider
 
