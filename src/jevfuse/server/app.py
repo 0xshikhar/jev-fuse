@@ -28,7 +28,12 @@ class RegisterPolicyPayload(BaseModel):
 
 def create_app(engine: JevFuseEngine | None = None) -> FastAPI:
     """Application factory for JEV Fuse FastAPI Gateway."""
-    
+    try:
+        from dotenv import load_dotenv
+        load_dotenv()
+    except Exception:
+        pass
+
     app_engine = engine or JevFuseEngine()
 
     @asynccontextmanager
@@ -238,6 +243,13 @@ def create_app(engine: JevFuseEngine | None = None) -> FastAPI:
     async def get_trace(trace_id: str) -> dict[str, Any]:
         """Fetch full diagnostic detail for a single trace."""
         record = app_engine.log_reader.get_record(trace_id)
+        if not record:
+            # If a write was queued within the last 50ms flush window, flush and retry
+            try:
+                await app_engine.log_writer.flush()
+                record = app_engine.log_reader.get_record(trace_id)
+            except Exception:
+                pass
         if not record:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Trace ID not found")
         return {

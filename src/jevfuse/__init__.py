@@ -1,6 +1,10 @@
-"""JEV Fuse — the open governance runtime, safety gate, and audit plane for System One models."""
-
 from __future__ import annotations
+
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except Exception:
+    pass
 
 from jevfuse.engine import JevFuseEngine
 from jevfuse.schema.decision import (

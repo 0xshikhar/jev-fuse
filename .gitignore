@@ -50,3 +50,7 @@ repo/
 # macOS
 .DS_Store
 
+# Environment & Keys
+.env
+.env.*
+
