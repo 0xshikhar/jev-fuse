@@ -51,8 +51,11 @@ def main() -> None:
 
     if args.subcommand == "serve":
         import uvicorn
-        app = create_app()
-        uvicorn.run(app, host=args.host, port=args.port)
+        if args.reload:
+            uvicorn.run("jevfuse.server.app:create_app", factory=True, host=args.host, port=args.port, reload=True)
+        else:
+            app = create_app()
+            uvicorn.run(app, host=args.host, port=args.port)
 
     elif args.subcommand == "mcp":
         server = create_mcp_server()
