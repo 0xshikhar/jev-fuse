@@ -71,16 +71,53 @@ $$\text{Raw Model Probability } P \xrightarrow{\quad\mathbf{JEV\ Fuse}\quad} \ma
 ## ⏱️ Quickstart: Get Running in 30 Seconds
 
 ### 1. Install JEV Fuse
+
+Choose your preferred installation method:
+
+#### Option A: Install from PyPI via uv or pip (Recommended)
 ```bash
-pip install jev-fuse
-# or using uv:
+# Ultra-fast install with uv
 uv pip install jev-fuse
+
+# Or add to your existing uv project
+uv add jev-fuse
+
+# Or standard pip
+pip install jev-fuse
 ```
 
-### 2. Start the Gateway
+#### Option B: Install Direct from GitHub
 ```bash
-export TYPESAFE_API_KEY="your-typesafe-api-key"
-jevfuse serve --port 8000
+# Direct install latest main branch via uv
+uv pip install git+https://github.com/0xshikhar/jev-fuse.git
+
+# Or clone and run in development mode
+git clone https://github.com/0xshikhar/jev-fuse.git
+cd jev-fuse
+uv sync
+```
+
+### 2. Configure Credentials & Start the Gateway
+
+#### Option A: Using `.env` File (Recommended)
+Create a `.env` file in your workspace directory:
+```env
+# Vercel AI Gateway Key (Free Jev Promotion)
+AI_GATEWAY_API_KEY="vck_your_key_here"
+
+# OR TypeSafe Direct API Key
+# TYPESAFE_API_KEY="ts_your_key_here"
+```
+
+Start the gateway—JEV Fuse automatically loads `.env` on startup:
+```bash
+uv run jevfuse serve --port 8000
+```
+
+#### Option B: Using Inline Shell Export
+```bash
+export AI_GATEWAY_API_KEY="vck_your_key_here"
+uv run jevfuse serve --port 8000
 ```
 
 ### 3. Point Your Existing Code or Agent
@@ -246,19 +283,23 @@ JEV Fuse includes a native [Model Context Protocol (MCP)](https://modelcontextpr
   "mcpServers": {
     "jev-fuse": {
       "command": "uv",
-      "args": ["run", "jevfuse", "mcp"]
+      "args": ["run", "jevfuse", "mcp"],
+      "env": {
+        "AI_GATEWAY_API_KEY": "vck_your_key_here"
+      }
     }
   }
 }
 ```
+*(If installed globally via `uv tool install jev-fuse` or `pip`, you can simply set `"command": "jevfuse"`, `"args": ["mcp"]`)*
 
 #### Tools Provided by the MCP Server:
 | MCP Tool | Purpose | Arguments |
 |---|---|---|
-| `fuse_guard` | Real-time shell command safety verification | `{"command": "pytest -v"}` |
-| `fuse_prune` | Fast token context compaction without narrative loss | `{"turns": [...], "goal": "..."}` |
-| `fuse_verify` | Fast binary verification of conditions | `{"statement": "...", "context": "..."}` |
-| `fuse_route` | Calibrated routing among bounded choices | `{"task": "...", "options": [...]}` |
+| `fuse_guard` | Real-time shell command safety verification (AST + allowlist + model) | `{"command": "pytest -v"}` |
+| `fuse_route` | Calibrated intent routing among discrete candidates | `{"query": "User asks for refund", "options": ["billing", "tech", "faq"]}` |
+| `fuse_verify` | Fast binary verification of conditions against context | `{"statement": "Uses parameterized SQL", "context": "SELECT * FROM users WHERE id = :id"}` |
+| `fuse_prune` | Fast token context compaction without narrative loss | `{"turns": [...], "goal": "Fix database deadlock"}` |
 
 ---
 
@@ -326,17 +367,26 @@ curl -X POST http://127.0.0.1:8000/v1/decide \
   }'
 ```
 
-#### C. Health & System Models
+#### C. Diagnostics, Traces & Health
 ```bash
-# Gateway health check
-curl http://127.0.0.1:8000/v1/health
+# 4-point full-stack diagnostic self-test (Gateway, SQLite, Cache, Model)
+curl -X POST http://127.0.0.1:8000/v1/diagnostics/self-test
 
-# Available models
-curl http://127.0.0.1:8000/v1/models
+# Inspect single decision trace by ID
+curl http://127.0.0.1:8000/v1/traces/<trace_id>
+
+# Submit human-in-the-loop ground truth feedback
+curl -X POST http://127.0.0.1:8000/v1/feedback \
+  -H "Content-Type: application/json" \
+  -d '{"trace_id": "<trace_id>", "label": "allow"}'
+
+# Gateway health & upstream readiness
+curl http://127.0.0.1:8000/healthz
+curl http://127.0.0.1:8000/readyz
 ```
 
-#### D. Zero-Build Telemetry Dashboard
-Open **`http://127.0.0.1:8000/dashboard`** in your browser to view live SQLite WAL metrics, latency distributions (`X-Fuse-Latency-Ms`), and decision audit breakdown.
+#### D. Zero-Build Telemetry Dashboard & Swagger UI
+Open **`http://127.0.0.1:8000/dashboard`** for the live visual control plane, or **`http://127.0.0.1:8000/docs`** for interactive OpenAPI Swagger exploration.
 
 ---
 
@@ -378,13 +428,15 @@ if __name__ == "__main__":
 
 ## 🖥️ Live Control Plane Dashboard & Trace Inspector
 
-JEV Fuse includes an out-of-the-box, zero-dependency real-time web dashboard served directly by the gateway. When you run `jevfuse serve`, open your browser to:
+JEV Fuse includes an out-of-the-box, zero-dependency real-time web dashboard served directly by the gateway. Crafted with a **traditional, professional light theme** inspired by OpenAPI Swagger UI (`/docs`), Stripe, and GitHub Settings (`#f8fafc` background, crisp white cards, clean borders, and clear REST method badges)—avoiding dark-mode eye strain and messy neon gradients.
+
+When you run `jevfuse serve`, open your browser to:
 
 👉 **`http://127.0.0.1:8000/dashboard`**
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────────────────┐
-│  ⚡ JEV Fuse Control Plane                                             ● OPERATIONAL   │
+│  ⚡ JEV FUSE CONTROL PLANE   [v0.1.0]              [Run Self-Test]    ● OPERATIONAL   │
 ├────────────────────────────────────────────────────────────────────────────────────────┤
 │  [ Total Decisions: 1,420 ]  [ Action Split: 82% ALLOW | 14% ASK | 4% DENY ]          │
 │  [ P95 Latency: 4.2ms ]      [ Cache Hit Ratio: 68.4% ]  [ Singleflight Saves: 310 ]   │
@@ -399,9 +451,15 @@ JEV Fuse includes an out-of-the-box, zero-dependency real-time web dashboard ser
 └────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-- **Live Activity & Action Breakdown**: Track real-time distribution of `ALLOW`, `ASK`, and `DENY` verdicts across all connected agent sessions.
-- **Deep Trace Inspector**: Click any decision row to view the full tamper-evident JSON trace—including exact input hashes, model version, rubric probability distributions, and policy execution reasons.
-- **Human-in-the-Loop Feedback**: Label ambiguous decisions directly from the dashboard to train offline calibration curves and monitor Expected Calibration Error (ECE).
+### Dashboard Highlights:
+- **Professional Light Aesthetic**: Crisp, high-contrast light theme engineered for day-long developer productivity and clear data presentation.
+- **One-Click Diagnostic Self-Test**: Click the **Run Self-Test** button in the header (or `POST /v1/diagnostics/self-test`) to perform a 4-point live health audit:
+  1. *Gateway Routing*: Verifies HTTP/2 routing and sub-millisecond response latency.
+  2. *SQLite WAL*: Asserts write-ahead log write and query operations.
+  3. *Micro-Cache*: Validates SHA-256 key normalization and LRU eviction.
+  4. *Upstream Provider*: Tests connectivity to Vercel AI Gateway / TypeSafe Jev cloud.
+- **Interactive Deep Trace Inspector**: Click any decision row or `[Inspect]` button to open a modal displaying the complete tamper-evident JSON audit record (`GET /v1/traces/{trace_id}`).
+- **Human-in-the-Loop Feedback**: Label edge-case decisions directly from the dashboard to train offline calibration curves and track Expected Calibration Error (ECE).
 - **Interactive OpenAPI Explorer**: Test and experiment with endpoints directly in your browser using Swagger UI at **`http://127.0.0.1:8000/docs`**.
 
 ---
@@ -489,7 +547,8 @@ JEV Fuse bridges the gap between raw neural probabilities and deterministic oper
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `TYPESAFE_API_KEY` | *(None)* | Your TypeSafe Jev API key (obtained from [console.typesafe.ai](https://console.typesafe.ai)) |
+| `AI_GATEWAY_API_KEY` | *(None)* | Vercel AI Gateway API key (for free TypeSafe Jev access) |
+| `TYPESAFE_API_KEY` | *(None)* | Direct TypeSafe Jev API key (obtained from [console.typesafe.ai](https://console.typesafe.ai)) |
 | `TYPESAFE_BASE_URL` | `https://api.typesafe.ai` | Upstream TypeSafe Jev service base URL |
 | `JEVFUSE_PORT` | `8000` | Port to bind the FastAPI gateway |
 | `JEVFUSE_HOST` | `127.0.0.1` | Network interface to bind (`127.0.0.1` for loopback, `0.0.0.0` for containers) |
@@ -500,22 +559,30 @@ JEV Fuse bridges the gap between raw neural probabilities and deterministic oper
 
 ## 📦 Installation Options
 
-### Using `uv` (Recommended)
+### Option 1: Install from PyPI via uv or pip (Recommended)
 ```bash
+# Ultra-fast install with uv
+uv pip install jev-fuse
+
+# Or add as project dependency
+uv add jev-fuse
+
+# Or standard pip
+pip install jev-fuse
+
 # Run CLI directly
 uv run jevfuse --help
-
-# Install into active virtual environment
-uv pip install jev-fuse
 ```
 
-### Using `pip`
+### Option 2: Install Direct from GitHub
 ```bash
-pip install jev-fuse
-```
+# Direct install latest main branch via uv
+uv pip install git+https://github.com/0xshikhar/jev-fuse.git
 
-### From Source
-```bash
+# Or install via pip from GitHub
+pip install git+https://github.com/0xshikhar/jev-fuse.git
+
+# Or clone for local development
 git clone https://github.com/0xshikhar/jev-fuse.git
 cd jev-fuse
 uv sync

@@ -6,7 +6,7 @@ This guide provides an exhaustive, copy-pasteable reference for testing and inte
 
 ## 📑 Table of Contents
 
-1. [Quickstart: Launching the JEV Fuse Gateway](#1-quickstart-launching-the-jev-fuse-gateway)
+1. [Quickstart: Installation & Launching JEV Fuse](#1-quickstart-installation--launching-jev-fuse)
 2. [Integration 1: Vercel AI SDK (Python)](#2-integration-1-vercel-ai-sdk-python)
 3. [Integration 2: Vercel AI SDK (TypeScript / Next.js)](#3-integration-2-vercel-ai-sdk-typescript--nextjs)
 4. [Integration 3: Official TypeSafe Python SDK (`typesafe-sdk`)](#4-integration-3-official-typesafe-python-sdk-typesafe-sdk)
@@ -15,44 +15,93 @@ This guide provides an exhaustive, copy-pasteable reference for testing and inte
 7. [Integration 6: Direct REST API & Microservices (curl / Any Language)](#7-integration-6-direct-rest-api--microservices-curl--any-language)
 8. [Integration 7: Embedded Python Library (LangChain / LlamaIndex / CrewAI)](#8-integration-7-embedded-python-library-langchain--llamaindex--crewai)
 9. [Integration 8: Context Window Compaction (`jevfuse prune`)](#9-integration-8-context-window-compaction-jevfuse-prune)
-10. [Integration 9: Active Learning Feedback & DuckDB Analytics](#10-integration-9-active-learning-feedback--duckdb-analytics)
-11. [Master Automated Verification Script](#11-master-automated-verification-script)
+10. [Integration 9: Control Plane Dashboard & Live Diagnostics](#10-integration-9-control-plane-dashboard--live-diagnostics)
+11. [Integration 10: Active Learning Feedback & DuckDB Analytics](#11-integration-10-active-learning-feedback--duckdb-analytics)
+12. [Master Automated Verification Script](#12-master-automated-verification-script)
 
 ---
 
-## 1. Quickstart: Launching the JEV Fuse Gateway
+## 1. Quickstart: Installation & Launching JEV Fuse
 
-JEV Fuse runs as a local sidecar or shared microservice that sits between your code and the upstream decision engine.
+JEV Fuse runs as a local sidecar, shared microservice, or embedded library that sits between your callers and the upstream decision engine.
 
-### Zero-Config Upstream Providers
+### Step 1: Install JEV Fuse
 
-JEV Fuse automatically detects your credentials and chooses the optimal upstream route:
+Choose your installation method:
+
+#### Option A: Install from PyPI via uv or pip (Recommended)
+```bash
+# Ultra-fast install with uv
+uv pip install jev-fuse
+
+# Or add as project dependency
+uv add jev-fuse
+
+# Or standard pip
+pip install jev-fuse
+```
+
+#### Option B: Install Direct from GitHub (Latest Main)
+```bash
+# Direct install latest repository commit via uv
+uv pip install git+https://github.com/0xshikhar/jev-fuse.git
+
+# Or install from GitHub via pip
+pip install git+https://github.com/0xshikhar/jev-fuse.git
+
+# Or clone for local development
+git clone https://github.com/0xshikhar/jev-fuse.git
+cd jev-fuse
+uv sync
+```
+
+### Step 2: Zero-Config Upstream Detection
+
+JEV Fuse automatically inspects your environment or `.env` file and chooses the optimal upstream route:
 
 | Environment Variable | Target Upstream Provider | Default Base URL |
 | :--- | :--- | :--- |
 | `AI_GATEWAY_API_KEY` | **Vercel AI Gateway** *(Free Jev access)* | `https://ai-gateway.vercel.sh/typesafe` |
 | `TYPESAFE_API_KEY` | **TypeSafe AI Cloud** | `https://api.typesafe.ai` |
-| *(None)* | **Local Deterministic Fallback** | In-process mock & AST heuristics |
+| *(None)* | **Local Deterministic Fallback** | In-process AST heuristics & 0ms allowlist |
 
-### Start the Gateway Server
+### Step 3: Start the Gateway Server
 
+#### Method A: Using `.env` File (Auto-Loaded)
+Create a `.env` file in your workspace:
+```env
+# Vercel AI Gateway (Free Jev promotion)
+AI_GATEWAY_API_KEY="vck_your_key_here"
+
+# OR Direct TypeSafe API Key
+# TYPESAFE_API_KEY="ts_your_key_here"
+```
+
+Start the gateway—JEV Fuse automatically loads `.env` on launch:
 ```bash
-# Option A: With your Vercel AI Gateway key (Free Jev promotion)
-export AI_GATEWAY_API_KEY="vck_your_key_here"
 uv run jevfuse serve --port 8000
+# or if installed globally:
+# jevfuse serve --port 8000
+```
 
-# Option B: With official TypeSafe API key
-export TYPESAFE_API_KEY="ts_your_key_here"
+#### Method B: Using Shell Export
+```bash
+export AI_GATEWAY_API_KEY="vck_your_key_here"
 uv run jevfuse serve --port 8000
 ```
 
-Verify that the gateway is alive:
+Verify gateway health and upstream provider status:
 ```bash
+# Local gateway health
 curl http://127.0.0.1:8000/healthz
 # {"status":"ok","service":"fuse-gateway"}
 
+# Upstream provider readiness
 curl http://127.0.0.1:8000/readyz
 # {"ready":true,"provider":{"status":"healthy","latency_ms":182.4,"message":"Connected to TypeSafe Jev API"}}
+
+# 4-point diagnostic self-test
+curl -X POST http://127.0.0.1:8000/v1/diagnostics/self-test
 ```
 
 ---
@@ -63,9 +112,9 @@ The official Vercel Python AI SDK (`ai-python.dev`) routes natively through the 
 
 ### Installation
 ```bash
-uv add "jev-fuse[vercel]"
-# or directly:
-uv add ai
+uv add jev-fuse ai
+# or standard pip:
+pip install jev-fuse ai
 ```
 
 ### Pattern A: Resolving the Jev Model via Vercel AI SDK
@@ -223,20 +272,34 @@ asyncio.run(main())
 
 JEV Fuse includes a native hook implementation conforming to Anthropic's **Claude Code PreToolUse** specification (2.1.274). It intercepts terminal commands before Claude Code executes them, preventing catastrophic operations (`rm -rf`, `DROP TABLE`, leaking secrets) while auto-approving harmless read operations (`git status`, `ls`).
 
-### 1. Configure Claude Code
-Add to your project's `.claude/config.json`:
+### Option A: Install via Claude Code Plugin Marketplace
+```bash
+claude plugin marketplace add 0xshikhar/jev-fuse
+claude plugin install jev-fuse@0xshikhar
+```
 
+### Option B: Configure Local PreToolUse Hook
+Add to your project's `.claude/settings.json` (or `.claude/config.json`):
 ```json
 {
   "hooks": {
-    "preToolUse": "uv run jevfuse hook pre-tool-use"
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv run jevfuse hook pre-tool-use"
+          }
+        ]
+      }
+    ]
   }
 }
 ```
 
-### 2. Manual CLI Verification
-You can test commands through the hook using stdin:
-
+### Manual CLI Verification
+Test commands through the hook using stdin:
 ```bash
 # Safe command -> Auto-allow
 echo '{"tool_name": "Bash", "tool_input": {"command": "git status"}}' | uv run jevfuse hook pre-tool-use
@@ -257,24 +320,13 @@ echo '{"tool_name": "Bash", "tool_input": {"command": "git push --force origin m
 
 JEV Fuse includes an embedded Model Context Protocol (MCP) server running over standard I/O (`stdio`).
 
-### Start the MCP Server
-```bash
-uv run jevfuse mcp
-```
-
-### Configure in Cursor (`~/.cursor/mcp.json`)
+### Configure in Cursor (`~/.cursor/mcp.json`) or Claude Desktop (`claude_desktop_config.json`):
 ```json
 {
   "mcpServers": {
     "jev-fuse": {
       "command": "uv",
-      "args": [
-        "--directory",
-        "/path/to/jev-fuse",
-        "run",
-        "jevfuse",
-        "mcp"
-      ],
+      "args": ["run", "jevfuse", "mcp"],
       "env": {
         "AI_GATEWAY_API_KEY": "vck_your_key_here"
       }
@@ -282,12 +334,81 @@ uv run jevfuse mcp
   }
 }
 ```
+*(If installed globally via `uv tool install jev-fuse` or `pip`, simply set `"command": "jevfuse"`, `"args": ["mcp"]`)*
 
-### Available Tools Exposed via MCP
-1. `fuse_guard`: Pre-execution bash safety gate returning `allow`, `ask`, or `deny`.
-2. `fuse_prune`: Conversation compaction removing dead tool outputs and logs.
-3. `fuse_verify`: Semantic binary statement verification against context.
-4. `fuse_route`: High-speed intent and routing classification.
+### 4 Native Tools Provided:
+
+#### 1. `fuse_guard`: Shell Safety Evaluation
+Evaluates whether a terminal command is safe for autonomous execution using AST lexical parsing, 0ms allowlists, and governed model checks.
+```json
+// Tool Call: fuse_guard
+{
+  "command": "pytest -v tests/"
+}
+// Response:
+{
+  "action": "allow",
+  "reason": "Standard verified read-only command",
+  "confidence": 1.0,
+  "latency_ms": 0.04
+}
+```
+
+#### 2. `fuse_route`: Discrete Intent Routing
+Routes an agent intent, user question, or task to one of several discrete tools or handlers.
+```json
+// Tool Call: fuse_route
+{
+  "query": "Customer wants to cancel subscription and refund invoice",
+  "options": ["billing_support", "technical_issues", "general_faq"]
+}
+// Response:
+{
+  "selected": "billing_support",
+  "confidence": 0.96,
+  "action": "allow",
+  "latency_ms": 22.4
+}
+```
+
+#### 3. `fuse_verify`: Binary Semantic Verification
+Checks whether a hypothesis holds true given supporting code, logs, or state context.
+```json
+// Tool Call: fuse_verify
+{
+  "statement": "The query uses parameterized placeholders to prevent SQL injection",
+  "context": "SELECT * FROM users WHERE id = :user_id"
+}
+// Response:
+{
+  "verified": true,
+  "confidence": 0.98,
+  "action": "allow",
+  "latency_ms": 19.8
+}
+```
+
+#### 4. `fuse_prune`: Token Context Compaction
+Scores and filters recorded conversation turns or tool outputs against an agent goal, stripping dead logs while preserving critical error messages.
+```json
+// Tool Call: fuse_prune
+{
+  "turns": [
+    {"role": "user", "content": "Fix database deadlock in postgres"},
+    {"role": "tool", "content": "500 lines of standard postgres startup output..."},
+    {"role": "assistant", "content": "Analyzing lock graph"}
+  ],
+  "goal": "Fix database deadlock"
+}
+// Response:
+{
+  "pruned_turns": [
+    {"turn_index": 0, "action": "keep", "relevance_score": 0.95},
+    {"turn_index": 1, "action": "truncate", "relevance_score": 0.15},
+    {"turn_index": 2, "action": "keep", "relevance_score": 0.88}
+  ]
+}
+```
 
 ---
 
@@ -377,6 +498,77 @@ curl -X POST http://127.0.0.1:8000/v1/tasks/register \
 
 ---
 
+### Endpoint 4: 4-Point Diagnostic Self-Test (`POST /v1/diagnostics/self-test`)
+Execute a live, end-to-end diagnostic audit across all 4 operational layers (Gateway, SQLite WAL, Micro-Cache, Upstream Provider):
+
+```bash
+curl -X POST http://127.0.0.1:8000/v1/diagnostics/self-test
+```
+**Response:**
+```json
+{
+  "status": "PASS",
+  "passed": true,
+  "timestamp": 1774476000.12,
+  "checks": [
+    {
+      "name": "Local Runtime & Policy Engine",
+      "endpoint": "GET /healthz",
+      "status": "PASS",
+      "latency_ms": 0.05,
+      "detail": "Core policy engine loaded, rules registered, memory bus ready"
+    },
+    {
+      "name": "Upstream TypeSafe AI Gateway",
+      "endpoint": "GET /readyz",
+      "status": "PASS",
+      "latency_ms": 182.4,
+      "detail": "Connected to jev (Connected to TypeSafe Jev API)"
+    },
+    {
+      "name": "Deterministic AST Guardrail",
+      "endpoint": "POST /v1/decide",
+      "status": "PASS",
+      "latency_ms": 0.08,
+      "detail": "'git status' -> ALLOW (Deterministic allowlist match)"
+    },
+    {
+      "name": "SQLite WAL Decision Audit Plane",
+      "endpoint": "GET /v1/metrics",
+      "status": "PASS",
+      "latency_ms": 0.15,
+      "detail": "Storage verified: decisions indexed with zero-copy WAL"
+    }
+  ]
+}
+```
+
+---
+
+### Endpoint 5: Deep Decision Trace Retrieval (`GET /v1/traces/{trace_id}`)
+Retrieve the complete, tamper-evident audit record for any decision:
+
+```bash
+curl http://127.0.0.1:8000/v1/traces/3febca7b-f721-4ec7-a1ac-2452d2d605b3
+```
+**Response:**
+```json
+{
+  "trace_id": "3febca7b-f721-4ec7-a1ac-2452d2d605b3",
+  "task": "bash-safety",
+  "action": "deny",
+  "confidence": 0.75,
+  "raw_score": 0.75,
+  "reason": "Destructive operation blocked by policy",
+  "cached": false,
+  "latency_ms": 712.4,
+  "provider": "typesafe-ai/jev",
+  "timestamp": "2026-09-25T01:45:10.123456"
+}
+```
+
+---
+
 ## 8. Integration 7: Embedded Python Library (LangChain / LlamaIndex / CrewAI)
 
 Embed JEV Fuse directly inside your Python backend without running an external server.
@@ -439,9 +631,24 @@ asyncio.run(run())
 
 ---
 
-## 10. Integration 9: Active Learning Feedback & DuckDB Analytics
+## 10. Integration 9: Control Plane Dashboard & Live Diagnostics
 
-Every decision made through JEV Fuse is logged to `~/.jevfuse/traces.db` with full trace fidelity.
+JEV Fuse includes an out-of-the-box, zero-dependency visual control plane served directly by the gateway. Crafted with a **traditional, professional light theme** inspired by OpenAPI Swagger UI (`/docs`), Stripe, and GitHub Settings (`#f8fafc` background, crisp white cards, clean borders, and clear REST method badges)—avoiding dark-mode eye strain and messy neon gradients.
+
+### Open the Dashboard
+Start the gateway and open your browser:
+👉 **`http://127.0.0.1:8000/dashboard`**
+
+### Key Capabilities:
+- **One-Click Diagnostic Self-Test**: Click **Run Self-Test** in the dashboard header (or trigger `POST /v1/diagnostics/self-test`) to perform a 4-point live audit of Gateway routing, SQLite WAL persistence, Micro-Cache store, and upstream model readiness.
+- **Deep Trace Inspector**: Click any decision row or `[Inspect]` button to open a modal displaying the complete tamper-evident JSON audit record (`GET /v1/traces/{trace_id}`).
+- **Interactive OpenAPI Explorer**: Test and experiment with endpoints directly in your browser using Swagger UI at **`http://127.0.0.1:8000/docs`**.
+
+---
+
+## 11. Integration 10: Active Learning Feedback & DuckDB Analytics
+
+Every decision made through JEV Fuse is logged to `jevfuse_decisions.db` with full trace fidelity.
 
 ### Submit Ground Truth Feedback (`POST /v1/feedback`)
 Help calibrate models by feeding back human or test verdicts:
@@ -477,7 +684,7 @@ print(df)
 
 ---
 
-## 11. Master Automated Verification Script
+## 12. Master Automated Verification Script
 
 Save this script as `verify_all.py` to test all integrations end-to-end in seconds:
 
@@ -486,6 +693,7 @@ Save this script as `verify_all.py` to test all integrations end-to-end in secon
 """Master verification test for JEV Fuse & Vercel AI Gateway."""
 
 import asyncio
+import json
 import os
 import httpx
 from jevfuse.server.app import create_app
@@ -508,38 +716,107 @@ async def main():
     print("  ✅ 'rm -rf /' -> DENY (AST root protection)")
 
     # 2. Test In-Process ASGI Gateway
-    print("\n[2/4] Testing REST API & Vercel AI Gateway Proxy...")
+    print("\n[2/4] Testing REST API, Diagnostics & Vercel AI Gateway Proxy...")
     app = create_app()
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
-        # Health & Ready
-        r = await client.get("/readyz")
-        assert r.status_code == 200
-        print("  ✅ GET /readyz -> Healthy (Upstream connected)")
+        # Health
+        h = await client.get("/healthz")
+        assert h.status_code == 200, f"Expected 200 on /healthz, got {h.status_code}"
+        print("  ✅ GET /healthz -> Healthy (Local runtime active)")
 
-        # SystemOne Proxy
-        payload = {
-            "model": "typesafe-ai/jev",
-            "state": "User requested deleting test database records.",
-            "questions": {"safe": {"type": "noul", "instructions": "Is this safe to run automated?"}}
-        }
-        res1 = await client.post("/v1/systemone", json=payload)
-        assert res1.status_code == 200
-        print("  ✅ POST /v1/systemone -> Live Vercel AI Gateway evaluated")
+        # Canonical governed decision endpoint
+        d_res = await client.post("/v1/decide", json={"task": "shell-guard", "kind": "bool", "input": "git status"})
+        assert d_res.status_code == 200
+        d_json = d_res.json()
+        trace_id = d_json.get("trace_id")
+        print(f"  ✅ POST /v1/decide -> Governed Policy Active (Action: {d_json.get('action')}, Trace: {trace_id[:8]}...)")
 
-        # Cache Hit Test
-        res2 = await client.post("/v1/systemone", json=payload)
-        lat = float(res2.headers.get("X-Fuse-Latency-Ms", "0"))
-        assert res2.status_code == 200
-        print(f"  ✅ POST /v1/systemone -> Instant Cache Hit ({lat:.3f} ms)")
+        # Trace retrieval
+        if trace_id:
+            t_res = await client.get(f"/v1/traces/{trace_id}")
+            assert t_res.status_code == 200
+            print(f"  ✅ GET /v1/traces/{trace_id[:8]}... -> Found audit record")
+
+        # 4-point diagnostic self-test
+        diag_res = await client.post("/v1/diagnostics/self-test")
+        assert diag_res.status_code == 200
+        diag_data = diag_res.json()
+        passed_count = sum(1 for r in diag_data.get("checks", []) if r.get("status") == "PASS")
+        print(f"  ✅ POST /v1/diagnostics/self-test -> {passed_count}/{len(diag_data.get('checks', []))} checks passed")
+
+        has_key = bool(
+            os.environ.get("AI_GATEWAY_API_KEY")
+            or os.environ.get("TYPESAFE_API_KEY")
+            or os.environ.get("JEV_API_KEY")
+        )
+        if has_key:
+            r = await client.get("/readyz")
+            assert r.status_code == 200, f"Expected 200 on /readyz, got {r.status_code}: {r.text}"
+            print("  ✅ GET /readyz -> Healthy (Upstream connected)")
+
+            # SystemOne Proxy
+            payload = {
+                "model": "typesafe-ai/jev",
+                "state": "User requested deleting test database records.",
+                "questions": {"safe": {"type": "noul", "instructions": "Is this safe to run automated?"}}
+            }
+            res1 = await client.post("/v1/systemone", json=payload)
+            assert res1.status_code == 200
+            print("  ✅ POST /v1/systemone -> Live Vercel AI Gateway evaluated")
+
+            # Cache Hit Test
+            res2 = await client.post("/v1/systemone", json=payload)
+            lat = float(res2.headers.get("X-Fuse-Latency-Ms", "0"))
+            assert res2.status_code == 200
+            print(f"  ✅ POST /v1/systemone -> Instant Cache Hit ({lat:.3f} ms)")
+        else:
+            print("  ℹ️  Notice: No API key found in environment or .env file.")
 
     # 3. Test MCP Server Tools
-    print("\n[3/4] Testing Model Context Protocol (MCP) Server...")
+    print("\n[3/4] Testing Model Context Protocol (MCP) Server (All 4 Tools)...")
     from jevfuse.mcp.server import create_mcp_server
     mcp_server = create_mcp_server()
     tools = await mcp_server.list_tools()
     tool_names = [t.name for t in tools]
-    assert "fuse_guard" in tool_names and "fuse_prune" in tool_names
-    print(f"  ✅ MCP Tools Active: {', '.join(tool_names)}")
+    assert "fuse_guard" in tool_names and "fuse_prune" in tool_names and "fuse_verify" in tool_names and "fuse_route" in tool_names
+    print(f"  ✅ All 4 MCP Tools Registered: {', '.join(tool_names)}")
+
+    # 3a. Test fuse_guard
+    res_guard = await mcp_server.call_tool("fuse_guard", {"command": "git status"})
+    guard_data = json.loads(res_guard.content[0].text)
+    assert guard_data["action"] == "allow"
+    print("  ✅ MCP fuse_guard('git status') -> ALLOW")
+
+    # 3b. Test fuse_route
+    res_route = await mcp_server.call_tool("fuse_route", {
+        "query": "Customer wants to cancel subscription and refund invoice",
+        "options": ["billing_support", "technical_issues", "general_faq"]
+    })
+    route_data = json.loads(res_route.content[0].text)
+    assert "selected" in route_data
+    print(f"  ✅ MCP fuse_route -> Selected '{route_data['selected']}' (Confidence: {route_data['confidence']})")
+
+    # 3c. Test fuse_verify
+    res_verify = await mcp_server.call_tool("fuse_verify", {
+        "statement": "The query uses parameterized placeholders to prevent SQL injection",
+        "context": "SELECT * FROM users WHERE id = :user_id"
+    })
+    verify_data = json.loads(res_verify.content[0].text)
+    assert "verified" in verify_data
+    print(f"  ✅ MCP fuse_verify -> Verified: {verify_data['verified']}")
+
+    # 3d. Test fuse_prune
+    res_prune = await mcp_server.call_tool("fuse_prune", {
+        "turns": [
+            {"role": "user", "content": "Fix database deadlock"},
+            {"role": "tool", "content": "Running test suite... passed"},
+            {"role": "assistant", "content": "Deadlock resolved"}
+        ],
+        "goal": "Fix database deadlock"
+    })
+    prune_data = json.loads(res_prune.content[0].text)
+    assert "pruned_turns" in prune_data
+    print(f"  ✅ MCP fuse_prune -> Compacted {len(prune_data['pruned_turns'])} turns")
 
     # 4. Summary
     print("\n[4/4] Verification Complete!")
