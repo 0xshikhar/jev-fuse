@@ -40,8 +40,21 @@ def make_norm_request(
 def test_jev_driver_missing_api_key(monkeypatch):
     monkeypatch.delenv("JEV_API_KEY", raising=False)
     monkeypatch.delenv("TYPESAFE_API_KEY", raising=False)
+    monkeypatch.delenv("AI_GATEWAY_API_KEY", raising=False)
+    monkeypatch.delenv("VERCEL_AI_GATEWAY_API_KEY", raising=False)
     with pytest.raises(ProviderAuthenticationError, match="TYPESAFE_API_KEY"):
         JevDriver()
+
+
+def test_jev_driver_ai_gateway_auto_detection(monkeypatch):
+    monkeypatch.delenv("JEV_API_KEY", raising=False)
+    monkeypatch.delenv("TYPESAFE_API_KEY", raising=False)
+    monkeypatch.delenv("TYPESAFE_BASE_URL", raising=False)
+    monkeypatch.delenv("JEV_BASE_URL", raising=False)
+    monkeypatch.setenv("AI_GATEWAY_API_KEY", "vck_mock_test")
+    driver = JevDriver()
+    assert driver._base_url == "https://ai-gateway.vercel.sh/typesafe"
+    assert driver._api_key == "vck_mock_test"
 
 
 def test_jev_driver_protocol_conformance():
