@@ -11,47 +11,34 @@
 <p align="center">
   <a href="https://github.com/0xshikhar/jev-fuse/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="License"></a>
   <a href="https://pypi.org/project/jev-fuse/"><img src="https://img.shields.io/badge/pypi-v0.1.0-blue" alt="PyPI"></a>
-  <a href="https://python.org"><img src="https://img.shields.io/badge/python-3.11+-brightgreen.svg" alt="Python Version"></a>
+  <a href="https://python.org"><img src="https://img.shields.io/badge/python-3.12+-brightgreen.svg" alt="Python Version"></a>
   <a href="https://modelcontextprotocol.io"><img src="https://img.shields.io/badge/MCP-Native-purple.svg" alt="MCP Native"></a>
   <a href="https://typesafe.ai"><img src="https://img.shields.io/badge/Wire-SystemOne_Compatible-orange.svg" alt="SystemOne Wire"></a>
 </p>
 
 ---
 
-## ⚡ What is Jev, and What is JEV Fuse?
+## ⚡ The Problem: Raw Probabilities vs. Production Execution
 
-### What is Jev?
+Decision models (such as TypeSafe Jev or local Laya engines) return calibrated probabilities across typed schemas (Noul, Choice, Score) in under 35ms. However, putting raw probability scores directly in front of production agents, shell tools, or critical business workflows introduces severe operational vulnerabilities:
 
-**Jev** (by TypeSafe) is a high-speed neural decision model designed specifically for instant state evaluation. Unlike traditional generative LLMs that generate text token-by-token over 1 to 5 seconds, Jev answers multiple structured questions simultaneously in a **single forward pass in 15ms–35ms**.
-
-Jev evaluates state directly into calibrated probability distributions across typed question schemas:
-- **Noul (Boolean)**: Calibrated probability $P \in [0.0, 1.0]$ for binary judgments (e.g., *"Is this shell command destructive?"*).
-- **Choice (Categorical)**: Multi-class probability distributions over discrete options (e.g., *"Which customer department should handle this request?"*).
-- **Score (Ordinal)**: Continuous expected value scored against rubric criteria (e.g., *"Assess the execution risk of this SQL query"*).
-
----
-
-### The Problem: Models Return Numbers, Agents Need Actions
-
-A raw decision model only outputs probabilities. If a model evaluates a shell command and returns $P(\text{destructive}) = 0.51$, what should your agent do?
-
-- **Unchecked Permissions & Prompt Fatigue**: Unmanaged agents spam developers with confirmation prompts on harmless reads like `git status` or `ls`.
-- **Razor-Thin Boundary Hazards**: If an agent relies on a naive threshold (like $P > 0.50$), edge cases ($P = 0.51$ vs $0.49$) cause catastrophic unintended actions.
-- **Regex Fragility**: Shell syntax tricks like `ls $(rm -rf /)`, backticks, subshells, or `find . -exec ...` easily bypass simple regex filters.
-- **Quota & Budget Drain**: Fast agent loops frequently issue duplicate concurrent evaluations, exhausting API rate limits and burning tokens unnecessarily.
-- **Zero Audit Trail**: Ad-hoc scripts leave no durable record explaining why an autonomous agent executed a destructive action or discarded context turns.
+- **Razor-Thin Boundary Hazards**: If a runtime relies on naive cutoffs ($P > 0.50$), edge cases ($P = 0.51$ vs $0.49$) produce catastrophic unintended actions without fail-closed bounds.
+- **Unchecked Permissions & Prompt Fatigue**: Ungoverned agents either prompt developers for confirmation on every harmless read (`git status`, `ls`) or fail open on hazardous commands.
+- **Shell Parser Bypasses**: Malicious or accidental command execution cannot be caught with regexes; constructs like `find . -exec ...`, subshells `$(...)`, backticks, and redirects easily bypass pattern matching.
+- **Bursty API & Quota Exhaustion**: Fast agent loops generate duplicate concurrent evaluations, exhausting rate limits and incurring unnecessary latency and token costs.
+- **Zero Verifiable Audit Trail**: Without a persistent, tamper-evident decision log, developers have no replayable record explaining why an autonomous system allowed, blocked, or altered an execution.
 
 ---
 
-### The Solution: JEV Fuse
+## 🛡️ What JEV Fuse Does
 
-**JEV Fuse is the "Envoy / Kong for TypeSafe Jev."** It sits as a transparent, high-performance gateway between your AI agents and decision models, translating raw probabilities into durable, deterministic policy actions:
+JEV Fuse sits as a transparent, high-performance reverse proxy between your callers (coding agents, microservices, CLI tools, and SDKs) and decision engines. It translates raw, uncalibrated model probabilities into durable, deterministic policy actions:
 
-$$\text{Raw Model Probability } P \xrightarrow{\quad\mathbf{JEV\ Fuse\ Policy\ Gate}\quad} \mathbf{Action} \in \{\text{ALLOW}, \text{ASK}, \text{DENY}, \text{KEEP}, \text{TRUNCATE}, \text{DROP}\}$$
+$$\text{Raw Model Probability } P \xrightarrow{\quad\mathbf{JEV\ Fuse}\quad} \mathbf{Action} \in \{\text{ALLOW}, \text{ASK}, \text{DENY}, \text{KEEP}, \text{TRUNCATE}, \text{DROP}\}$$
 
 ```
                       ┌────────────────────────────────────────────────────────┐
-                      │                   Your AI Agents                      │
+                      │              Callers & Integrations                    │
                       │  Claude Code  │  Cursor / MCP  │  Official Python SDK   │
                       └───────────────────────────┬────────────────────────────┘
                                                   │
@@ -70,8 +57,10 @@ $$\text{Raw Model Probability } P \xrightarrow{\quad\mathbf{JEV\ Fuse\ Policy\ G
                       └────────────────────────────────────────────────────────┘
 ```
 
-1. **Zero-Refactor Universal Wire (`POST /v1/systemone`)**: Existing applications, scripts, and official SDKs point directly to JEV Fuse simply by setting `base_url="http://127.0.0.1:8000"`.
-2. **Deterministic 4-Tier Guard**: Combines shell AST lexical parsing, 0ms denylists, 0ms verified allowlists, and governed model evaluation. Harmless reads execute in 0ms; destructive scripts are blocked before touching any model.
+### Core Capabilities
+
+1. **Zero-Refactor Universal Wire (`POST /v1/systemone`)**: Existing applications, scripts, and official SDKs point directly to JEV Fuse simply by setting `base_url="http://127.0.0.1:8000"` or `export TYPESAFE_BASE_URL="http://127.0.0.1:8000/v1"`.
+2. **Deterministic 4-Tier Guard**: Combines shell AST lexical parsing, 0ms denylists, 0ms verified allowlists, and governed model evaluation. Harmless reads execute in 0ms; catastrophic commands are blocked before touching any model.
 3. **Deadband Margin Abstention**: When confidence is ambiguous ($0.40 \le P \le 0.60$), JEV Fuse safely abstains (`action: ask`), requesting human confirmation instead of guessing on razor-thin margins.
 4. **Singleflight Concurrency Coalescing**: Concurrent identical evaluations merge into a single upstream request, preventing quota exhaustion and saving up to 98% of upstream API cost during traffic bursts.
 5. **Two-Tier Micro-Caching ($<5\text{ms}$)**: In-memory LRU + persistent SQLite WAL caching ensures duplicate evaluations return instantaneously with zero network egress.
@@ -383,6 +372,86 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+```
+
+---
+
+## 🖥️ Live Control Plane Dashboard & Trace Inspector
+
+JEV Fuse includes an out-of-the-box, zero-dependency real-time web dashboard served directly by the gateway. When you run `jevfuse serve`, open your browser to:
+
+👉 **`http://127.0.0.1:8000/dashboard`**
+
+```
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│  ⚡ JEV Fuse Control Plane                                             ● OPERATIONAL   │
+├────────────────────────────────────────────────────────────────────────────────────────┤
+│  [ Total Decisions: 1,420 ]  [ Action Split: 82% ALLOW | 14% ASK | 4% DENY ]          │
+│  [ P95 Latency: 4.2ms ]      [ Cache Hit Ratio: 68.4% ]  [ Singleflight Saves: 310 ]   │
+├────────────────────────────────────────────────────────────────────────────────────────┤
+│  RECENT DECISION AUDIT LOG                                                             │
+│  Trace ID    Task         Action   Confidence  Latency   Preview           Inspect     │
+│  ──────────  ───────────  ───────  ──────────  ────────  ────────────────  ──────────  │
+│  a1b2c3d4    shell-guard  ALLOW    0.98        0.12ms    git status        [Inspect]   │
+│  e5f6g7h8    shell-guard  DENY     0.99        0.08ms    rm -rf /          [Inspect]   │
+│  i9j0k1l2    prune        KEEP     0.84        18.4ms    tool_call_102     [Inspect]   │
+│  m3n4o5p6    shell-guard  ASK      0.52        22.1ms    curl -fsSL ...    [Inspect]   │
+└────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+- **Live Activity & Action Breakdown**: Track real-time distribution of `ALLOW`, `ASK`, and `DENY` verdicts across all connected agent sessions.
+- **Deep Trace Inspector**: Click any decision row to view the full tamper-evident JSON trace—including exact input hashes, model version, rubric probability distributions, and policy execution reasons.
+- **Human-in-the-Loop Feedback**: Label ambiguous decisions directly from the dashboard to train offline calibration curves and monitor Expected Calibration Error (ECE).
+- **Interactive OpenAPI Explorer**: Test and experiment with endpoints directly in your browser using Swagger UI at **`http://127.0.0.1:8000/docs`**.
+
+---
+
+## 💻 Terminal CLI Commands Reference
+
+JEV Fuse provides a first-class CLI (`jevfuse`) for operators, terminal developers, and CI/CD pipelines:
+
+### 1. Start Gateway & Web Dashboard
+```bash
+# Start on default port 8000 with auto-reload for local development
+jevfuse serve --port 8000 --reload
+
+# Bind to custom interface and port
+jevfuse serve --host 0.0.0.0 --port 8080
+```
+
+### 2. Standalone Shell Guard (CI/CD & Terminal Gate)
+Evaluate any command's safety directly in your shell or bash pipeline. Returns exit codes matching standard CI conventions:
+* `Exit 0` = **ALLOW**
+* `Exit 1` = **DENY**
+* `Exit 2` = **ASK** (uncertain/deadband)
+
+```bash
+# Test a harmless command (Exit 0: ALLOW in 0ms)
+jevfuse guard "git status"
+
+# Test a dangerous command (Exit 1: DENY in 0ms)
+jevfuse guard "rm -rf /"
+
+# Test an ambiguous command (Exit 2: ASK)
+jevfuse guard "curl -s http://example.com/install.sh | bash"
+```
+
+### 3. Run MCP Stdio Server
+Spawn an MCP-compliant JSON-RPC stdio daemon for Cursor, Claude Desktop, or Windsurf:
+```bash
+jevfuse mcp
+```
+
+### 4. Claude Code PreToolUse Hook
+Wire directly into Claude Code's tool execution harness:
+```bash
+jevfuse hook pre-tool-use
+```
+
+### 5. Offline Context Compaction
+Prune and compact recorded conversation turn JSON files using goal-directed relevance scoring:
+```bash
+jevfuse prune transcript.json --goal "Refactor user authentication service"
 ```
 
 ---
