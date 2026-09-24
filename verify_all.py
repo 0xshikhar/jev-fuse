@@ -2,6 +2,7 @@
 """Master verification test for JEV Fuse & Vercel AI Gateway."""
 
 import asyncio
+import json
 import os
 import httpx
 from jevfuse.server.app import create_app
@@ -24,7 +25,7 @@ async def main():
     print("  ✅ 'rm -rf /' -> DENY (AST root protection)")
 
     # 2. Test In-Process ASGI Gateway
-    print("\n[2/4] Testing REST API & Vercel AI Gateway Proxy...")
+    print("\n[2/4] Testing REST API, Diagnostics & Vercel AI Gateway Proxy...")
     app = create_app()
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
         # Health
@@ -35,7 +36,22 @@ async def main():
         # Canonical governed decision endpoint
         d_res = await client.post("/v1/decide", json={"task": "shell-guard", "kind": "bool", "input": "git status"})
         assert d_res.status_code == 200
-        print(f"  ✅ POST /v1/decide -> Governed Policy Active (Action: {d_res.json().get('action')})")
+        d_json = d_res.json()
+        trace_id = d_json.get("trace_id")
+        print(f"  ✅ POST /v1/decide -> Governed Policy Active (Action: {d_json.get('action')}, Trace: {trace_id[:8]}...)")
+
+        # Trace retrieval
+        if trace_id:
+            t_res = await client.get(f"/v1/traces/{trace_id}")
+            assert t_res.status_code == 200
+            print(f"  ✅ GET /v1/traces/{trace_id[:8]}... -> Found audit record")
+
+        # 4-point diagnostic self-test
+        diag_res = await client.post("/v1/diagnostics/self-test")
+        assert diag_res.status_code == 200
+        diag_data = diag_res.json()
+        passed_count = sum(1 for r in diag_data.get("checks", []) if r.get("status") == "PASS")
+        print(f"  ✅ POST /v1/diagnostics/self-test -> {passed_count}/{len(diag_data.get('checks', []))} checks passed")
 
         has_key = bool(
             os.environ.get("AI_GATEWAY_API_KEY")
@@ -63,18 +79,53 @@ async def main():
             assert res2.status_code == 200
             print(f"  ✅ POST /v1/systemone -> Instant Cache Hit ({lat:.3f} ms)")
         else:
-            print("  ℹ️  Notice: AI_GATEWAY_API_KEY is not exported in this shell session.")
-            print("     (To test live upstream Vercel AI Gateway calls, run with:")
-            print("      export AI_GATEWAY_API_KEY=\"vck_...\" && uv run python verify_all.py)")
+            print("  ℹ️  Notice: No API key found in environment or .env file.")
 
     # 3. Test MCP Server Tools
-    print("\n[3/4] Testing Model Context Protocol (MCP) Server...")
+    print("\n[3/4] Testing Model Context Protocol (MCP) Server (All 4 Tools)...")
     from jevfuse.mcp.server import create_mcp_server
     mcp_server = create_mcp_server()
     tools = await mcp_server.list_tools()
     tool_names = [t.name for t in tools]
-    assert "fuse_guard" in tool_names and "fuse_prune" in tool_names
-    print(f"  ✅ MCP Tools Active: {', '.join(tool_names)}")
+    assert "fuse_guard" in tool_names and "fuse_prune" in tool_names and "fuse_verify" in tool_names and "fuse_route" in tool_names
+    print(f"  ✅ All 4 MCP Tools Registered: {', '.join(tool_names)}")
+
+    # 3a. Test fuse_guard
+    res_guard = await mcp_server.call_tool("fuse_guard", {"command": "git status"})
+    guard_data = json.loads(res_guard.content[0].text)
+    assert guard_data["action"] == "allow"
+    print("  ✅ MCP fuse_guard('git status') -> ALLOW")
+
+    # 3b. Test fuse_route
+    res_route = await mcp_server.call_tool("fuse_route", {
+        "query": "Customer wants to cancel subscription and refund invoice",
+        "options": ["billing_support", "technical_issues", "general_faq"]
+    })
+    route_data = json.loads(res_route.content[0].text)
+    assert "selected" in route_data
+    print(f"  ✅ MCP fuse_route -> Selected '{route_data['selected']}' (Confidence: {route_data['confidence']})")
+
+    # 3c. Test fuse_verify
+    res_verify = await mcp_server.call_tool("fuse_verify", {
+        "statement": "The query uses parameterized placeholders to prevent SQL injection",
+        "context": "SELECT * FROM users WHERE id = :user_id"
+    })
+    verify_data = json.loads(res_verify.content[0].text)
+    assert "verified" in verify_data
+    print(f"  ✅ MCP fuse_verify -> Verified: {verify_data['verified']}")
+
+    # 3d. Test fuse_prune
+    res_prune = await mcp_server.call_tool("fuse_prune", {
+        "turns": [
+            {"role": "user", "content": "Fix database deadlock"},
+            {"role": "tool", "content": "Running test suite... passed"},
+            {"role": "assistant", "content": "Deadlock resolved"}
+        ],
+        "goal": "Fix database deadlock"
+    })
+    prune_data = json.loads(res_prune.content[0].text)
+    assert "pruned_turns" in prune_data
+    print(f"  ✅ MCP fuse_prune -> Compacted {len(prune_data['pruned_turns'])} turns")
 
     # 4. Summary
     print("\n[4/4] Verification Complete!")
